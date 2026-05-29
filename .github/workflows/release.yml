@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build Release Assets
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            ext: ""
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+          - goos: darwin
+            goarch: arm64
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            ext: ".exe"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w" -o "dist/agentsync-${GOOS}-${GOARCH}${{ matrix.ext }}" .
+
+      - name: Package
+        shell: bash
+        run: |
+          cd dist
+          if [[ "${{ matrix.goos }}" == "windows" ]]; then
+            zip "agentsync-${{ matrix.goos }}-${{ matrix.goarch }}.zip" "agentsync-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          else
+            tar -czf "agentsync-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "agentsync-${{ matrix.goos }}-${{ matrix.goarch }}"
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: agentsync-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+  publish:
+    name: Publish GitHub Release
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

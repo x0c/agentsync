@@ -1,0 +1,13 @@
+# Drafts
+DRAFT_*.md
+*-draft.md
+
+# Go build outputs
+/agentsync
+*.test
+coverage.out
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
