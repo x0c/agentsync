@@ -106,7 +106,7 @@ agentsync --all ~/Codes
 
 ## 开发
 
-项目文档入口：[docs/OVERVIEW.md](docs/OVERVIEW.md)。
+项目文档入口：[AGENTS.md](AGENTS.md)。
 
 ```bash
 go test ./...

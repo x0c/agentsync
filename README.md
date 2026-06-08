@@ -106,7 +106,7 @@ agentsync --all ~/Codes
 
 ## Development
 
-Project documentation starts at [docs/OVERVIEW.md](docs/OVERVIEW.md).
+Project documentation is indexed in [AGENTS.md](AGENTS.md).
 
 ```bash
 go test ./...

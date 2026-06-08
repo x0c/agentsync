@@ -32,10 +32,9 @@ goreleaser check
 
 ## 文档导航
 
-- 文档总索引：[docs/OVERVIEW.md](docs/OVERVIEW.md)
-- 领域知识库：[docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)
-- 使用指南：[docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)
-- README：[README.md](README.md)
+- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md) —— 核心概念、目录模型、同步对象与安全边界
+- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md) —— 安装、检查、收敛与验证命令
+- [README.md](README.md) —— 面向用户的简明说明
 
 ## 改动注意事项
 
