@@ -128,7 +128,7 @@ func TestMissingSourceCreatedFromExistingTargets(t *testing.T) {
 	}
 }
 
-func TestSkillSyncImportsAndLinks(t *testing.T) {
+func TestSkillSyncImportsAndLinksRoot(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
 	cfg := Config{
@@ -156,9 +156,12 @@ func TestSkillSyncImportsAndLinks(t *testing.T) {
 		t.Fatalf("canonical skill was not created; report=%+v", report)
 	}
 	for _, target := range cfg.SkillTargets {
-		if !symlinkPointsTo(filepath.Join(target.Path, "demo"), filepath.Join(cfg.SkillSource, "demo")) {
-			t.Fatalf("skill target was not linked: %s; report=%+v", target.Path, report)
+		if !symlinkPointsTo(target.Path, cfg.SkillSource) {
+			t.Fatalf("skill target root was not linked: %s; report=%+v", target.Path, report)
 		}
+	}
+	if !pathExists(filepath.Join(cfg.SkillTargets[1].Path, "demo", "SKILL.md")) {
+		t.Fatalf("linked target root does not expose canonical skill; report=%+v", report)
 	}
 
 	report, err = syncConfig(cfg, Options{})
@@ -172,7 +175,40 @@ func TestSkillSyncImportsAndLinks(t *testing.T) {
 	}
 }
 
-func TestSkillSyncSkipsHiddenDirs(t *testing.T) {
+func TestSkillRootLinkReflectsDeletedCanonicalSkill(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	cfg := Config{
+		Source:      filepath.Join(dir, "AGENTS.md"),
+		Targets:     []Target{{Path: filepath.Join(dir, "codex", "AGENTS.md"), Mode: "link"}},
+		SkillSource: filepath.Join(dir, "agentsync", "skills"),
+		SkillTargets: []SkillTarget{
+			{Path: filepath.Join(dir, "codex", "skills")},
+		},
+	}
+	canonicalSkill := filepath.Join(cfg.SkillSource, "demo")
+	if err := os.MkdirAll(canonicalSkill, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(canonicalSkill, "SKILL.md"), []byte("# Demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	targetSkill := filepath.Join(cfg.SkillTargets[0].Path, "demo")
+	if !pathExists(filepath.Join(targetSkill, "SKILL.md")) {
+		t.Fatalf("target skill should exist through the skill root symlink")
+	}
+	if err := os.RemoveAll(canonicalSkill); err != nil {
+		t.Fatal(err)
+	}
+	if pathExists(targetSkill) {
+		t.Fatalf("target skill should disappear when canonical skill is deleted")
+	}
+}
+
+func TestSkillSyncPreservesHiddenDirs(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
 	cfg := Config{
@@ -193,8 +229,11 @@ func TestSkillSyncSkipsHiddenDirs(t *testing.T) {
 	if _, err := syncConfig(cfg, Options{}); err != nil {
 		t.Fatalf("syncConfig() error = %v", err)
 	}
-	if pathExists(filepath.Join(cfg.SkillSource, ".system")) {
-		t.Fatalf("hidden system skills should not be imported")
+	if !pathExists(filepath.Join(cfg.SkillSource, ".system", "internal", "SKILL.md")) {
+		t.Fatalf("hidden system skills should be preserved before replacing the root")
+	}
+	if !symlinkPointsTo(cfg.SkillTargets[0].Path, cfg.SkillSource) {
+		t.Fatalf("skill target root was not linked")
 	}
 }
 

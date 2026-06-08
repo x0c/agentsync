@@ -4,6 +4,7 @@ DRAFT_*.md
 
 # Go build outputs
 /agentsync
+/dist/
 *.test
 coverage.out
 
@@ -11,3 +12,4 @@ coverage.out
 .DS_Store
 .idea/
 .vscode/
+.claude/scheduled_tasks.lock

@@ -1,0 +1,73 @@
+version: 2
+
+project_name: agentsync
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: agentsync
+    main: .
+    binary: agentsync
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+
+archives:
+  - id: agentsync
+    ids:
+      - agentsync
+    name_template: >-
+      {{ .ProjectName }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - README.md
+      - README.zh-CN.md
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+
+homebrew_casks:
+  - name: agentsync
+    ids:
+      - agentsync
+    binaries:
+      - agentsync
+    repository:
+      owner: x0c
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/x0c/agentsync
+    description: Keep AI coding-agent instructions and reusable skills in one canonical place
+    license: MIT
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/agentsync"]
+          end
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} {{ .Tag }}"
+
+release:
+  github:
+    owner: x0c
+    name: agentsync

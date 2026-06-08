@@ -1,7 +1,6 @@
 package agentsync
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,6 +34,12 @@ func syncSkills(cfg Config, opts Options) ([]TargetResult, []string, error) {
 			return results, backups, err
 		}
 	}
+	preserved, preserveBackups, err := preserveHiddenSkillEntries(cfg.SkillSource, cfg.SkillTargets, opts)
+	if err != nil {
+		return results, backups, err
+	}
+	results = append(results, preserved...)
+	backups = append(backups, preserveBackups...)
 	materialized, materialBackups, err := materializeCanonicalSkillLinks(cfg.SkillSource, opts)
 	if err != nil {
 		return results, backups, err
@@ -58,28 +63,14 @@ func syncSkills(cfg Config, opts Options) ([]TargetResult, []string, error) {
 		results = append(results, TargetResult{Path: srcPath, Status: "created", Detail: "skill imported from " + existing[name]})
 	}
 
-	canonical, err := discoverSkills(cfg.SkillSource, false)
-	if err != nil {
-		return results, backups, err
-	}
-	canonicalNames := sortedSkillNames(canonical)
 	for _, target := range cfg.SkillTargets {
-		if !pathExists(target.Path) {
-			if opts.Check {
-				results = append(results, TargetResult{Path: target.Path, Status: "missing", Detail: "would create skill target directory"})
-			} else if err := os.MkdirAll(target.Path, 0o755); err != nil {
-				return results, backups, err
-			}
+		result, backup, err := syncSkillRoot(cfg.SkillSource, target.Path, opts)
+		if err != nil {
+			return results, backups, err
 		}
-		for _, name := range canonicalNames {
-			result, backup, err := syncSkillLink(canonical[name], filepath.Join(target.Path, name), opts)
-			if err != nil {
-				return results, backups, err
-			}
-			results = append(results, result)
-			if backup != "" {
-				backups = append(backups, backup)
-			}
+		results = append(results, result)
+		if backup != "" {
+			backups = append(backups, backup)
 		}
 	}
 	return results, backups, nil
@@ -107,8 +98,45 @@ func discoverSkills(root string, resolveSymlinks bool) (map[string]string, error
 	return skills, nil
 }
 
-func isSkillDir(path string) bool {
-	return skillDirPath(path, true) != ""
+func preserveHiddenSkillEntries(source string, targets []SkillTarget, opts Options) ([]TargetResult, []string, error) {
+	var results []TargetResult
+	var backups []string
+	for _, target := range targets {
+		entries, err := os.ReadDir(target.Path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return results, backups, err
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if !strings.HasPrefix(name, ".") {
+				continue
+			}
+			srcPath := filepath.Join(target.Path, name)
+			dstPath := filepath.Join(source, name)
+			if pathExists(dstPath) {
+				continue
+			}
+			info, err := os.Lstat(srcPath)
+			if err != nil {
+				return results, backups, err
+			}
+			if !info.IsDir() {
+				continue
+			}
+			if opts.Check {
+				results = append(results, TargetResult{Path: dstPath, Status: "missing", Detail: "would preserve hidden skill entry from " + srcPath})
+				continue
+			}
+			if err := copyDir(srcPath, dstPath); err != nil {
+				return results, backups, err
+			}
+			results = append(results, TargetResult{Path: dstPath, Status: "created", Detail: "hidden skill entry preserved from " + srcPath})
+		}
+	}
+	return results, backups, nil
 }
 
 func skillDirPath(path string, resolveSymlinks bool) string {
@@ -200,12 +228,12 @@ func sortedSkillNames(skills map[string]string) []string {
 	return names
 }
 
-func syncSkillLink(source, target string, opts Options) (TargetResult, string, error) {
+func syncSkillRoot(source, target string, opts Options) (TargetResult, string, error) {
 	result := TargetResult{Path: target}
 	if !pathExists(target) {
 		if opts.Check {
 			result.Status = "missing"
-			result.Detail = "would create skill alias"
+			result.Detail = "would create skill directory alias"
 			return result, "", nil
 		}
 		kind, err := createAlias(source, target, "link")
@@ -224,12 +252,12 @@ func syncSkillLink(source, target string, opts Options) (TargetResult, string, e
 	if info.Mode()&os.ModeSymlink != 0 {
 		if symlinkPointsTo(target, source) {
 			result.Status = "ok"
-			result.Detail = "skill symlink"
+			result.Detail = "skill directory symlink"
 			return result, "", nil
 		}
 		if opts.Check {
 			result.Status = "wrong-link"
-			result.Detail = "would back up and replace skill alias"
+			result.Detail = "would back up and replace skill directory alias"
 			return result, "", nil
 		}
 		backup, err := backupAny(target)
@@ -252,24 +280,9 @@ func syncSkillLink(source, target string, opts Options) (TargetResult, string, e
 		result.Detail = "skill target is not a directory"
 		return result, "", nil
 	}
-	if !isSkillDir(target) {
-		result.Status = "blocked"
-		result.Detail = "directory does not contain SKILL.md"
-		return result, "", nil
-	}
-
-	same, err := sameSkillDir(source, target)
-	if err != nil {
-		return result, "", err
-	}
 	if opts.Check {
-		if same {
-			result.Status = "replaceable"
-			result.Detail = "would replace identical skill directory with alias"
-		} else {
-			result.Status = "replaceable"
-			result.Detail = "would back up divergent skill directory and replace with alias"
-		}
+		result.Status = "replaceable"
+		result.Detail = "would back up and replace skill directory with alias"
 		return result, "", nil
 	}
 	backup, err := backupAny(target)
@@ -283,24 +296,7 @@ func syncSkillLink(source, target string, opts Options) (TargetResult, string, e
 	if err != nil {
 		return result, "", err
 	}
-	if same {
-		result.Status = "replaced"
-		result.Detail = "identical; " + kind
-	} else {
-		result.Status = "replaced"
-		result.Detail = "divergent backup kept; " + kind
-	}
+	result.Status = "replaced"
+	result.Detail = kind
 	return result, backup, nil
-}
-
-func sameSkillDir(a, b string) (bool, error) {
-	aa, err := dirDigest(a)
-	if err != nil {
-		return false, fmt.Errorf("digest %s: %w", a, err)
-	}
-	bb, err := dirDigest(b)
-	if err != nil {
-		return false, fmt.Errorf("digest %s: %w", b, err)
-	}
-	return aa == bb, nil
 }

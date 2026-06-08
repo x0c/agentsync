@@ -31,14 +31,22 @@ Canonical skill directory:
 Tool-specific skill aliases:
 
 ```text
-~/.claude/skills/<skill-name>
-~/.codex/skills/<skill-name>
-~/.config/opencode/skill/<skill-name>
+~/.claude/skills -> ~/.config/agentsync/skills
+~/.codex/skills -> ~/.config/agentsync/skills
+~/.config/opencode/skill -> ~/.config/agentsync/skills
 ```
 
-Each skill is managed as a whole directory. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill.
+Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately.
 
 ## Install
+
+With Homebrew:
+
+```bash
+brew install --cask x0c/tap/agentsync
+```
+
+Or with Go:
 
 ```bash
 go install github.com/x0c/agentsync@latest
@@ -90,9 +98,9 @@ agentsync --all ~/Codes
 
 - `--check` is read-only.
 - Existing unique instruction content is appended to the canonical source before aliases are created.
-- Existing skill directories are copied into the canonical skill directory before aliases are created.
+- Existing skill directories are copied into the canonical skill directory before tool-specific skill roots are replaced with aliases.
 - Replaced files and directories are backed up under `~/.config/agentsync/backups/`.
-- Hidden skill directories such as Codex `.system` internals are ignored.
+- Hidden skill directories such as Codex `.system` internals are preserved in the canonical skill root before tool-specific skill roots are replaced.
 - macOS and Linux use symlinks first.
 - Windows tries symlinks first, then hardlinks, then a managed copy with a marker comment.
 
@@ -105,6 +113,8 @@ go test ./...
 go build ./...
 agentsync --check
 ```
+
+Tagged releases are built by GoReleaser. To publish the Homebrew cask, create the `x0c/homebrew-tap` repository and add a `HOMEBREW_TAP_GITHUB_TOKEN` secret with permission to push to that tap.
 
 ## License
 
