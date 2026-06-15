@@ -14,17 +14,13 @@ brew install --cask x0c/tap/agentsync
 go install github.com/x0c/agentsync@latest
 ```
 
-在项目根目录执行：
+在项目根目录执行（本机 binary 安装在 `~/.local/bin/`）：
 
 ```bash
-go install .
+go build -o ~/.local/bin/agentsync .
 ```
 
-安装后命令位于 Go 用户 bin 目录，当前机器是：
-
-```text
-$(go env GOPATH)/bin/agentsync
-```
+> `go install .` 会安装到 `$(go env GOPATH)/bin/`，若该路径不在 PATH 中，改用上方 `go build` 直接指定输出路径。
 
 ## 检查
 

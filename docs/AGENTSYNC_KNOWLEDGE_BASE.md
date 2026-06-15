@@ -54,3 +54,31 @@ agentsync 用一个命令把多个 AI coding agent 的指令文件和 Agent Skil
 - 替换文件或目录前会写入 `~/.config/agentsync/backups/`。
 - Codex 的隐藏系统 skill 目录，例如 `.system`，会在工具侧 Skill 根目录替换前先保留到统一 Skill 根目录。
 - 单测必须设置 `AGENTSYNC_CONFIG_HOME`，避免测试备份污染真实用户目录。
+
+## 故障排查
+
+### `~/.claude/skills` 变成了真实目录，不是软链接
+
+**原因**：安装的 binary 版本过旧。旧版 binary（100db77 之前）对每个 skill 在工具侧目录内单独建软链接，不会把整个 `~/.claude/skills` 替换成软链接；新版才支持整体目录替换。
+
+**识别方式**：`ls -la ~/.claude/ | grep skills` 显示 `drwxr-xr-x`（真实目录）而非 `lrwxrwxrwx`（软链接）。`agentsync --check` 会报 `replaceable ... would back up and replace skill directory with alias`。
+
+**解法**：
+```bash
+cd ~/Codes/Go/agentsync
+go build -o ~/.local/bin/agentsync .
+agentsync --check   # 应看到 replaceable
+agentsync           # 执行修复
+```
+
+### skill 无法被 agentsync 识别
+
+**原因**：skill 不是合法目录结构。agentsync 识别 skill 的唯一条件是：`~/.config/agentsync/skills/<name>/SKILL.md` 存在。裸文件（如 `~/.claude/skills/foo` 是一个普通文件）、缺少 `SKILL.md` 的目录，均不会出现在 `agentsync --check` 的 Skills 列表里。
+
+**解法**：在 `~/.config/agentsync/skills/<name>/` 目录下创建 `SKILL.md`，文件头部加 frontmatter：
+```markdown
+---
+name: <skill-name>
+description: <一句话描述>
+---
+```
