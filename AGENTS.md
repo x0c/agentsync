@@ -1,44 +1,68 @@
-@~/.config/agentsync/AGENTS.md
-
 # agentsync 项目规范
 
-本项目遵循全局 Agent 规范；本文件补充 agentsync 项目的技术栈、命令和文档入口。
+agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Grok 等工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
+
+本仓是工具型项目，不按传统业务域拆文档；文档入口按用户工作流和命令能力组织。
 
 ## 项目定位
 
-agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件和 Agent Skill 目录收敛到统一源：
-
 - 全局规范源：`~/.config/agentsync/AGENTS.md`
 - 全局 Skill 源：`~/.config/agentsync/skills/`
-- 工具入口：Codex、Claude Code、OpenCode 的指令文件和 skill 目录软链接
+- 全局工具入口：`~/.codex/AGENTS.md`、`~/.config/opencode/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.grok/AGENTS.md`
+- 全局 Skill 入口：`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`
+- 项目级入口：仓库内 `AGENTS.md` 与 `CLAUDE.md`
 
-## 技术栈
+## 技术栈与约束
 
-- Go 1.25+
-- 仅使用 Go 标准库
-- 单 binary CLI，安装命令为 `brew install --cask x0c/tap/agentsync` 或 `go install .`
-- tag 发布使用 GoReleaser，并更新 `x0c/homebrew-tap`
+- Go 1.25+，仅使用 Go 标准库。
+- 单 binary CLI，入口为 `main.go`，核心实现位于 `internal/agentsync/`。
+- CLI 输出、错误信息和新增注释按本地规范使用中文；已有英文用户输出属于当前公开接口，改动前需要同步评估 README 与测试。
+- 默认优先创建 symlink；Windows 或不支持 symlink 的场景会退化为 hardlink 或受管副本。
+- 修改默认路径、别名策略、备份策略、Skill 同步策略或命令参数时，必须同步更新本文档、`README.md`、`README.zh-CN.md` 和 `docs/` 对应文档。
+- 测试必须使用隔离配置目录，避免向真实 `~/.config/agentsync/backups/` 写测试备份。
 
-## 常用命令
+## 验证命令
+
+文档改动只需执行文档导航检查。代码、配置、构建脚本或发布配置改动后执行：
 
 ```bash
 go test ./...
 go build ./...
 go install .
 agentsync --check
-agentsync
 goreleaser check
 ```
 
+`agentsync --check` 是只读检查；涉及真实用户目录的验证前，先确认不会覆盖未备份内容。功能性改动完成并验证通过后，按全局规范默认进入发布流程；本次 doc-init 只改文档，不提交、不发版。
+
 ## 文档导航
 
-- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md) —— 核心概念、目录模型、同步对象与安全边界
-- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md) —— 安装、检查、收敛与验证命令
-- [README.md](README.md) —— 面向用户的简明说明
+> 以下文档在涉及对应领域的开发、评审或排查时先读取。
+
+- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：命令使用、检查模式、全局收敛、仓库收敛、批量收敛、草稿采纳、本地验证、发布入口
+- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：规范文件收敛、Skill 根目录收敛、路径与别名策略、备份与合并、安全边界、AI 易错点
+- [README.md](README.md)：面向公开用户的英文安装与用法说明
+- [README.zh-CN.md](README.zh-CN.md)：面向公开用户的中文安装与用法说明
+
+## 领域地图（doc-init）
+
+<!-- 覆盖度复核基线：2026-06-30 · 源码指纹 扫描 20 文件 / Go 8 / 0 子模块 · 基线提交 577b8bb -->
+
+| 领域 | 入口锚点 |
+|------|---------|
+| 命令调度与运行模式 | main.go；internal/agentsync/run.go |
+| 规范文件收敛 | internal/agentsync/run.go；internal/agentsync/merge.go |
+| Skill 根目录收敛 | internal/agentsync/skills.go |
+| 路径、别名与备份策略 | internal/agentsync/paths.go；internal/agentsync/files.go |
+
+## 待补充知识库（doc-init backlog）
+
+- [待补充] 发布与安装链路 Guide —— 入口锚点：.github/workflows/release.yml；.goreleaser.yml；触发场景：调整 GitHub Release、GoReleaser、Homebrew cask、安装分发前。
+- [待补充] 测试隔离与安全验证 Guide —— 入口锚点：internal/agentsync/run_test.go；触发场景：新增同步场景测试、调整真实用户目录保护、排查测试污染风险前。
 
 ## 改动注意事项
 
-- 修改默认路径、软链接策略、备份策略或 skill 同步策略时，同步更新 `README.md`、[docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md) 和 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)。
-- 改动同步逻辑后必须跑 `go test ./...`，涉及真实机器状态时再跑 `agentsync --check`。
-- 功能性改动完成并验证通过后，必须执行 `go install .` 重新安装本地 CLI；需要正式发布时按 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md) 的发布流程创建并推送 `v*` tag。
-- 测试必须使用隔离配置目录，避免向真实 `~/.config/agentsync/backups/` 写测试备份。
+- 改 `--check`、`--repo`、`--all`、`--adopt`、`--force` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。
+- 改统一源、目标入口、备份、合并、别名降级或 Skill 根目录替换时，先读 [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
+- `CLAUDE.md` 必须保持单行 `@AGENTS.md`，不要在其中写项目规则。
+- `.doc-init-*.json` 是 doc-init 扫描产物；若需要重新初始化可复用或重跑，但普通功能改动不依赖它们。

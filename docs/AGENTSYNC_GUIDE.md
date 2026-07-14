@@ -1,106 +1,169 @@
-# agentsync 使用指南
+# agentsync 命令工作流 Guide
 
-## 安装
+## 文档定位
 
-推荐使用 Homebrew：
+本文覆盖 agentsync 的命令入口、用户工作流、验证方式和发布入口。它回答“执行哪个命令会发生什么、改完如何确认行为正确”。收敛机制内部细节、路径策略、备份策略和 Skill 根目录替换规则见 [AGENTSYNC_KNOWLEDGE_BASE.md](AGENTSYNC_KNOWLEDGE_BASE.md)。
 
-```bash
-brew install --cask x0c/tap/agentsync
+## 核心命令速查
+
+| 场景 | 命令 | 是否写文件 | 主要输出 | 实现入口 |
+|---|---|---:|---|---|
+| 预览全局收敛 | `agentsync --check` | 否 | `Results`、`Skills`、可能的 `Merge draft` | `main.go`；`internal/agentsync/run.go` |
+| 执行全局收敛 | `agentsync` | 是 | 统一源、目标别名、备份、Skill 结果 | `internal/agentsync/run.go`；`internal/agentsync/skills.go` |
+| 收敛当前仓库 | `agentsync --repo` | 是 | 当前仓库 `CLAUDE.md` 指向 `AGENTS.md` | `internal/agentsync/paths.go` |
+| 批量收敛仓库 | `agentsync --all ~/Codes` | 是 | 扫描到的仓库数量与每个仓库结果 | `internal/agentsync/run.go` |
+| 采纳合并草稿 | `agentsync --adopt <draft>` | 是 | 备份原统一源并用草稿替换 | `internal/agentsync/merge.go` |
+| 强制替换冲突入口 | `agentsync --force` | 是 | 备份后替换错误链接或不同内容文件 | `internal/agentsync/run.go` |
+
+## 命令调度流程
+
+```mermaid
+flowchart TD
+    A[main.go 解析 flag] --> B[agentsync.Run]
+    B -->|--all| C[runAll 扫描 Git 仓库]
+    B -->|--repo| D[repoConfig 使用仓库 AGENTS.md]
+    B -->|默认| E[defaultGlobalConfig 使用用户级统一源]
+    D --> F[syncConfig]
+    E --> F
+    C --> F
+    B -->|--adopt| G[adoptDraft]
+    G --> F
+    F --> H[syncTarget 处理规范文件入口]
+    F --> I[syncSkills 处理 Skill 根目录]
+    H --> J[printReport]
+    I --> J
 ```
 
-也可以使用 Go 安装最新版本：
+命令入口只负责参数到 `Options` 的映射。实际工作都汇入 `Run()`：先判断是否批量仓库模式，再根据全局/仓库模式生成配置，最后执行 `syncConfig()` 并打印报告。
 
-```bash
-go install github.com/x0c/agentsync@latest
-```
+## 全局收敛工作流
 
-在项目根目录执行（本机 binary 安装在 `~/.local/bin/`）：
+全局模式的统一源与目标来自 `defaultGlobalConfig()`：
 
-```bash
-go build -o ~/.local/bin/agentsync .
-```
+| 类型 | 路径 | 说明 |
+|---|---|---|
+| 规范统一源 | `~/.config/agentsync/AGENTS.md` | 所有工具共享的指令文件 |
+| Codex 规范入口 | `~/.codex/AGENTS.md` | 指向统一源 |
+| OpenCode 规范入口 | `~/.config/opencode/AGENTS.md` | 指向统一源 |
+| Claude 规范入口 | `~/.claude/CLAUDE.md` | 指向统一源或受管副本 |
+| Grok 规范入口 | `~/.grok/AGENTS.md` | 指向统一源 |
+| Skill 统一源 | `~/.config/agentsync/skills` | 每个子目录是一个完整 skill |
+| Claude Skill 入口 | `~/.claude/skills` | 整体指向 Skill 统一源 |
+| Codex Skill 入口 | `~/.codex/skills` | 整体指向 Skill 统一源 |
+| OpenCode Skill 入口 | `~/.config/opencode/skill` | 整体指向 Skill 统一源 |
+| Grok Skill 入口 | `~/.grok/skills` | 整体指向 Skill 统一源 |
 
-> `go install .` 会安装到 `$(go env GOPATH)/bin/`，若该路径不在 PATH 中，改用上方 `go build` 直接指定输出路径。
+第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态。第二次运行应收敛到 `ok`，这是幂等性判断的主要用户信号。
 
-## 检查
+## 检查模式
 
-只检查状态，不修改文件：
+`--check` 只做状态判定，不创建统一源、不写备份、不替换入口、不复制 skill。报告中的状态含义：
 
-```bash
-agentsync --check
-```
+| 状态 | 含义 | 下一步 |
+|---|---|---|
+| `ok` | 入口已指向统一源 | 无需处理 |
+| `missing` | 统一源或目标入口缺失 | 直接运行 `agentsync` 创建 |
+| `mergeable` | 目标文件有独特内容，可合并进统一源 | 运行 `agentsync`，必要时检查合并结果 |
+| `replaceable` | 文件或目录可被备份后替换 | 运行 `agentsync` |
+| `wrong-link` | 已是链接但指向不对 | 运行 `agentsync`；冲突强时可加 `--force` |
+| `broken-link` | 链接目标已失效 | 运行 `agentsync` 修复 |
+| `blocked` | 目标不是可处理的普通文件或目录 | 人工判断后再处理 |
 
-所有规范文件和 skill 目录收敛后，应看到 `Results` 和 `Skills` 都是 `ok`。
+**AI 易错点**：不要把 `--check` 报告里的 “would ...” 当作已修复。它只说明下一次真实运行会做什么。
 
-## 一键收敛
+## 仓库模式
 
-执行：
-
-```bash
-agentsync
-```
-
-该命令会：
-
-- 创建或更新 `~/.config/agentsync/AGENTS.md`
-- 创建或更新 `~/.config/agentsync/skills/`
-- 将 Codex、Claude Code、OpenCode 的规范文件替换成软链接
-- 将 Codex、Claude Code、OpenCode 的用户 skill 根目录整体替换成指向 `~/.config/agentsync/skills/` 的软链接
-- 写入替换前备份
-
-## 项目级收敛
-
-在 Git 仓库内执行：
-
-```bash
-agentsync --repo
-```
-
-该命令使用当前仓库的 `AGENTS.md` 作为项目级源文件，并管理：
+`agentsync --repo` 用当前 Git 仓库根目录的 `AGENTS.md` 作为项目级源，只管理一个目标：
 
 ```text
 CLAUDE.md -> AGENTS.md
 ```
 
-## 批量仓库收敛
+仓库模式通过 `findRepoRoot()` 找 `.git`，再由 `repoConfig()` 构造配置。目标使用相对链接模式，便于仓库移动目录后链接仍成立。
 
-扫描目录下所有 Git 仓库：
+仓库模式不处理全局 Skill 目录，也不处理用户级全局规范入口。
+
+## 批量仓库模式
+
+`agentsync --all <目录>` 会递归扫描目录下的 Git 仓库，并对每个仓库执行仓库模式。扫描时会跳过 `node_modules`、`.venv`、`target`、`build` 等常见大型构建目录。
+
+批量模式的结果聚合到一个报告里，`Repositories` 表示扫描到的仓库数量。某个仓库出现错误会中断本轮执行；这适合个人工作区批量规范 `CLAUDE.md` 指针。
+
+**AI 易错点**：`--all` 的语义是“批量仓库级指针收敛”，不是全局规范和 Skill 同步；不要把它写成对每个仓库执行全局模式。
+
+## 合并草稿与采纳
+
+当现有入口文件和统一源存在冲突时，agentsync 会尽量将独特内容追加到统一源。对于需要人工整理的场景，`createMergeDraft()` 会在合并草稿目录生成 Markdown，报告中出现 `Merge draft` 和下一步命令：
 
 ```bash
-agentsync --all ~/Codes
+agentsync --adopt <draft-path>
 ```
 
-## 验证
+采纳草稿时，`adoptDraft()` 会：
+
+1. 展开草稿路径。
+2. 确认草稿存在。
+3. 非检查模式下备份当前统一源。
+4. 将草稿内容写入统一源。
+5. 继续执行一次同步，让目标入口重新收敛。
+
+`--adopt --check` 只检查草稿路径是否可用，不替换统一源。
+
+## 本地开发验证
 
 代码改动后至少执行：
 
 ```bash
 go test ./...
 go build ./...
+```
+
+修改 CLI 行为后执行：
+
+```bash
 go install .
 agentsync --check
 ```
 
-功能性改动完成后，验证通过必须重新安装本地 CLI。需要正式发布时，继续按下方发布流程创建并推送 `v*` tag。
+改发布配置后执行：
 
-## 发布
+```bash
+goreleaser check
+```
 
-推送 `v*` tag 后，GitHub Actions 会调用 GoReleaser 构建 GitHub Release 资产，并更新 Homebrew tap 中的 cask：
+文档-only 改动执行：
+
+```bash
+python3 /home/vibecoder/.config/agentsync/skills/doc-init/scripts/doc_nav_lint.py --root .
+```
+
+本仓没有常驻服务、HTTP 端口或本地数据库依赖，不生成 `OPERATIONS_GUIDE.md`。运行验证主要是 CLI 冒烟和测试。
+
+## 发布入口
+
+正式发布由 tag 触发：
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-发布 Homebrew cask 前，需要准备：
+GitHub Actions 的 release 工作流使用 GoReleaser，读取 `.goreleaser.yml`，构建 Linux、Darwin、Windows 的 amd64/arm64 产物，并更新 `x0c/homebrew-tap` 的 cask。
 
-- `x0c/homebrew-tap` 仓库。
-- `HOMEBREW_TAP_GITHUB_TOKEN` 仓库 secret，token 需要有推送 `x0c/homebrew-tap` 的权限。
+发布前必须确认：
 
-发布完成后验证：
+- `HOMEBREW_TAP_GITHUB_TOKEN` 已配置且有推送 `x0c/homebrew-tap` 的权限。
+- `.goreleaser.yml` 的 `homebrew_casks` 仍指向正确 tap。
+- tag 版本与 README 安装说明一致。
 
-```bash
-brew update
-brew install --cask x0c/tap/agentsync
-agentsync --check
-```
+发布链路本次未深写为独立文档，已登记在根 `AGENTS.md` 的 doc-init backlog。
+
+## 覆盖度与待补充项
+
+- 代码推断覆盖：命令入口、参数分发、全局/仓库/批量/草稿工作流均已从代码和 README 校准。
+- 多源证据补强：读取了 README、中文 README、CI、Release workflow、GoReleaser 配置和既有 docs。
+- Git 弱信号：历史只有 5 个提交，热点主要集中在 README、docs、release workflow 和 Skill 同步，作为优先级参考，不单独沉淀成当前规则。
+- Q&A 补充：缺少用户经验输入；真实团队常用命令、失败处理习惯和发布前人工检查口径仍待补充。
+- 待补充：发布与安装链路、测试隔离与安全验证可在后续 doc-update/doc-init 续写中拆为独立 Guide。
+
+<!-- 该文档由 doc-init 更新于 2026-06-30；定位：AI 修改 agentsync 命令工作流前的快速参考文档 -->

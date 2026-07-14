@@ -20,11 +20,13 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.codex/AGENTS.md", Mode: "link"},
 		{Path: "~/.config/opencode/AGENTS.md", Mode: "link"},
 		{Path: "~/.claude/CLAUDE.md", Mode: "claude"},
+		{Path: "~/.grok/AGENTS.md", Mode: "link"},
 	}
 	skillTargets := []SkillTarget{
 		{Path: "~/.claude/skills"},
 		{Path: "~/.codex/skills"},
 		{Path: "~/.config/opencode/skill"},
+		{Path: "~/.grok/skills"},
 	}
 	for i := range targets {
 		p, err := expandPath(targets[i].Path)
