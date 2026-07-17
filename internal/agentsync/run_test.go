@@ -277,6 +277,44 @@ func TestSkillSyncMaterializesCanonicalSymlink(t *testing.T) {
 	}
 }
 
+func TestDefaultGlobalConfigIncludesKimiCode(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".kimi-code", "AGENTS.md")) {
+		t.Fatalf("Kimi Code 规范入口缺失: %+v", cfg.Targets)
+	}
+	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".kimi-code", "skills")) {
+		t.Fatalf("Kimi Code Skill 入口缺失: %+v", cfg.SkillTargets)
+	}
+}
+
+func targetPaths(targets []Target) []string {
+	paths := make([]string, 0, len(targets))
+	for _, t := range targets {
+		paths = append(paths, t.Path)
+	}
+	return paths
+}
+
+func skillTargetPaths(targets []SkillTarget) []string {
+	paths := make([]string, 0, len(targets))
+	for _, t := range targets {
+		paths = append(paths, t.Path)
+	}
+	return paths
+}
+
+func hasPathSuffix(paths []string, suffix string) bool {
+	for _, p := range paths {
+		if strings.HasSuffix(p, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func containsAll(value string, needles ...string) bool {
 	for _, needle := range needles {
 		if !strings.Contains(value, needle) {

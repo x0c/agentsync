@@ -4,7 +4,7 @@
 
 `agentsync` 是一个小型 Go CLI，用来把 AI coding agent 的全局指令和可复用 Skill 统一收敛到一个源目录。
 
-它解决 Codex、Claude Code、OpenCode、Grok 各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
+它解决 Codex、Claude Code、OpenCode、Grok、Kimi Code 各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
 
 ## 管理对象
 
@@ -21,6 +21,7 @@
 ~/.config/opencode/AGENTS.md
 ~/.claude/CLAUDE.md
 ~/.grok/AGENTS.md
+~/.kimi-code/AGENTS.md
 ```
 
 统一 Skill 目录：
@@ -36,6 +37,7 @@
 ~/.codex/skills -> ~/.config/agentsync/skills
 ~/.config/opencode/skill -> ~/.config/agentsync/skills
 ~/.grok/skills -> ~/.config/agentsync/skills
+~/.kimi-code/skills -> ~/.config/agentsync/skills
 ```
 
 每个 Skill 在统一 Skill 根目录下按完整目录管理。目录内必须包含 `SKILL.md`，旁边的脚本、模板、参考资料和资源文件会一起保留。由于工具侧 Skill 根目录整体指向统一根目录，新增、删除或重命名统一源中的 Skill 会立即反映到所有工具侧。

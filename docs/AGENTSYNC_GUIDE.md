@@ -47,11 +47,13 @@ flowchart TD
 | OpenCode 规范入口 | `~/.config/opencode/AGENTS.md` | 指向统一源 |
 | Claude 规范入口 | `~/.claude/CLAUDE.md` | 指向统一源或受管副本 |
 | Grok 规范入口 | `~/.grok/AGENTS.md` | 指向统一源 |
+| Kimi Code 规范入口 | `~/.kimi-code/AGENTS.md` | 指向统一源 |
 | Skill 统一源 | `~/.config/agentsync/skills` | 每个子目录是一个完整 skill |
 | Claude Skill 入口 | `~/.claude/skills` | 整体指向 Skill 统一源 |
 | Codex Skill 入口 | `~/.codex/skills` | 整体指向 Skill 统一源 |
 | OpenCode Skill 入口 | `~/.config/opencode/skill` | 整体指向 Skill 统一源 |
 | Grok Skill 入口 | `~/.grok/skills` | 整体指向 Skill 统一源 |
+| Kimi Code Skill 入口 | `~/.kimi-code/skills` | 整体指向 Skill 统一源 |
 
 第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态。第二次运行应收敛到 `ok`，这是幂等性判断的主要用户信号。
 

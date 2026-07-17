@@ -8,6 +8,9 @@ DRAFT_*.md
 *.test
 coverage.out
 
+# doc-init 扫描产物
+.doc-init-*.json
+
 # OS / editor
 .DS_Store
 .idea/

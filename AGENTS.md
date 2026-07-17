@@ -1,6 +1,6 @@
 # agentsync 项目规范
 
-agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Grok 等工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
+agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Grok、Kimi Code 等工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
 
 本仓是工具型项目，不按传统业务域拆文档；文档入口按用户工作流和命令能力组织。
 
@@ -8,8 +8,8 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 
 - 全局规范源：`~/.config/agentsync/AGENTS.md`
 - 全局 Skill 源：`~/.config/agentsync/skills/`
-- 全局工具入口：`~/.codex/AGENTS.md`、`~/.config/opencode/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.grok/AGENTS.md`
-- 全局 Skill 入口：`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`
+- 全局工具入口：`~/.codex/AGENTS.md`、`~/.config/opencode/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.grok/AGENTS.md`、`~/.kimi-code/AGENTS.md`
+- 全局 Skill 入口：`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`、`~/.kimi-code/skills`
 - 项目级入口：仓库内 `AGENTS.md` 与 `CLAUDE.md`
 
 ## 技术栈与约束

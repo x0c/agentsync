@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 `agentsync` is a small Go CLI that keeps AI coding-agent instructions and reusable skills in one canonical place.
 
-It prevents drift between tools such as Codex, Claude Code, OpenCode, and Grok by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
+It prevents drift between tools such as Codex, Claude Code, OpenCode, Grok, and Kimi Code by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
 
 ## What It Manages
 
@@ -21,6 +21,7 @@ Tool-specific instruction aliases:
 ~/.config/opencode/AGENTS.md
 ~/.claude/CLAUDE.md
 ~/.grok/AGENTS.md
+~/.kimi-code/AGENTS.md
 ```
 
 Canonical skill directory:
@@ -36,6 +37,7 @@ Tool-specific skill aliases:
 ~/.codex/skills -> ~/.config/agentsync/skills
 ~/.config/opencode/skill -> ~/.config/agentsync/skills
 ~/.grok/skills -> ~/.config/agentsync/skills
+~/.kimi-code/skills -> ~/.config/agentsync/skills
 ```
 
 Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately.
