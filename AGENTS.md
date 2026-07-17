@@ -8,8 +8,8 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 
 - 全局规范源：`~/.config/agentsync/AGENTS.md`
 - 全局 Skill 源：`~/.config/agentsync/skills/`
-- 全局工具入口：`~/.codex/AGENTS.md`、`~/.config/opencode/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.grok/AGENTS.md`、`~/.kimi-code/AGENTS.md`
-- 全局 Skill 入口：`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`、`~/.kimi-code/skills`
+- 全局工具入口：`~/.codex/AGENTS.md`、`~/.config/opencode/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.grok/AGENTS.md`、`~/.kimi-code/AGENTS.md`、`~/.agents/AGENTS.md`
+- 全局 Skill 入口：`~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`、`~/.kimi-code/skills`、`~/.agents/skills`
 - 项目级入口：仓库内 `AGENTS.md` 与 `CLAUDE.md`
 
 ## 技术栈与约束

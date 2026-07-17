@@ -24,7 +24,7 @@ agentsync 的同步机制围绕“统一源”和“工具入口”展开。统�
 
 - 规范统一源：`~/.config/agentsync/AGENTS.md`。
 - Skill 统一源：`~/.config/agentsync/skills`。
-- 规范目标入口：Codex、OpenCode、Claude Code、Grok、Kimi Code 的全局指令文件。
+- 规范目标入口：Codex、OpenCode、Claude Code、Grok、Kimi Code 的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。
 - Skill 目标入口：各工具的用户 skill 根目录。
 - 仓库级源：当前 Git 仓库的 `AGENTS.md`。
 - 仓库级目标：当前 Git 仓库的 `CLAUDE.md`。
@@ -59,11 +59,13 @@ flowchart LR
     Source --> Claude[~/.claude/CLAUDE.md]
     Source --> Grok[~/.grok/AGENTS.md]
     Source --> Kimi[~/.kimi-code/AGENTS.md]
+    Source --> Agents[~/.agents/AGENTS.md]
     SkillSource[Skill 统一源 skills/] --> ClaudeSkills[~/.claude/skills]
     SkillSource --> CodexSkills[~/.codex/skills]
     SkillSource --> OpenCodeSkills[~/.config/opencode/skill]
     SkillSource --> GrokSkills[~/.grok/skills]
     SkillSource --> KimiSkills[~/.kimi-code/skills]
+    SkillSource --> AgentsSkills[~/.agents/skills]
 ```
 
 ## §2 核心流程
@@ -136,7 +138,7 @@ CLAUDE.md -> AGENTS.md
 |---|---|---|---|
 | 规范统一源 | `~/.config/agentsync/AGENTS.md` | 用户级指令唯一真实内容 | 不存在时可从已有工具入口导入 |
 | Skill 统一源 | `~/.config/agentsync/skills` | 所有工具共享的 skill 根目录 | 子目录必须包含 `SKILL.md` 才算 skill |
-| 工具规范入口 | Codex/OpenCode/Claude/Grok/Kimi Code 全局指令文件 | 工具读取规范的入口 | 可为 symlink、hardlink 或受管副本 |
+| 工具规范入口 | Codex/OpenCode/Claude/Grok/Kimi Code 全局指令文件，及通用 `~/.agents/AGENTS.md` | 工具读取规范的入口 | 可为 symlink、hardlink 或受管副本 |
 | 工具 Skill 入口 | 各工具 skill 根目录 | 工具发现 skill 的入口 | 新版策略是根目录整体别名 |
 | 仓库级入口 | `AGENTS.md`、`CLAUDE.md` | 项目文档入口 | `CLAUDE.md` 应只指向 `AGENTS.md` |
 | 备份 | `~/.config/agentsync/backups/` | 替换前恢复点 | 替换文件和目录前必须写备份 |
@@ -211,7 +213,7 @@ agentsync --check
 
 检查点：
 
-- `Skills` 区块能报告 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`、`~/.kimi-code/skills`。
+- `Skills` 区块能报告 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`、`~/.kimi-code/skills`、`~/.agents/skills`。
 - 已整体指向统一源时应显示 `ok` 或 skill directory symlink。
 - 真实目录但可替换时应显示 `replaceable`，真实运行前会备份。
 

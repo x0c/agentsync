@@ -290,6 +290,19 @@ func TestDefaultGlobalConfigIncludesKimiCode(t *testing.T) {
 	}
 }
 
+func TestDefaultGlobalConfigIncludesGenericAgents(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".agents", "AGENTS.md")) {
+		t.Fatalf("通用跨工具规范入口缺失: %+v", cfg.Targets)
+	}
+	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".agents", "skills")) {
+		t.Fatalf("通用跨工具 Skill 入口缺失: %+v", cfg.SkillTargets)
+	}
+}
+
 func targetPaths(targets []Target) []string {
 	paths := make([]string, 0, len(targets))
 	for _, t := range targets {

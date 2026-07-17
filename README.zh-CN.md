@@ -22,6 +22,7 @@
 ~/.claude/CLAUDE.md
 ~/.grok/AGENTS.md
 ~/.kimi-code/AGENTS.md
+~/.agents/AGENTS.md
 ```
 
 统一 Skill 目录：
@@ -38,6 +39,7 @@
 ~/.config/opencode/skill -> ~/.config/agentsync/skills
 ~/.grok/skills -> ~/.config/agentsync/skills
 ~/.kimi-code/skills -> ~/.config/agentsync/skills
+~/.agents/skills -> ~/.config/agentsync/skills
 ```
 
 每个 Skill 在统一 Skill 根目录下按完整目录管理。目录内必须包含 `SKILL.md`，旁边的脚本、模板、参考资料和资源文件会一起保留。由于工具侧 Skill 根目录整体指向统一根目录，新增、删除或重命名统一源中的 Skill 会立即反映到所有工具侧。

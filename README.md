@@ -22,6 +22,7 @@ Tool-specific instruction aliases:
 ~/.claude/CLAUDE.md
 ~/.grok/AGENTS.md
 ~/.kimi-code/AGENTS.md
+~/.agents/AGENTS.md
 ```
 
 Canonical skill directory:
@@ -38,6 +39,7 @@ Tool-specific skill aliases:
 ~/.config/opencode/skill -> ~/.config/agentsync/skills
 ~/.grok/skills -> ~/.config/agentsync/skills
 ~/.kimi-code/skills -> ~/.config/agentsync/skills
+~/.agents/skills -> ~/.config/agentsync/skills
 ```
 
 Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately.
