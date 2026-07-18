@@ -29,12 +29,14 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 ```bash
 go test ./...
 go build ./...
-go install .
+GOBIN=~/.local/bin go install .   # 见下方说明,不能省略 GOBIN
 agentsync --check
 goreleaser check
 ```
 
-`agentsync --check` 是只读检查；涉及真实用户目录的验证前，先确认不会覆盖未备份内容。功能性改动完成并验证通过后，按全局规范默认进入发布流程；本次 doc-init 只改文档，不提交、不发版。
+- **覆盖本机二进制必须带 `GOBIN=~/.local/bin`**:本机 `agentsync` 实际在 `~/.local/bin/agentsync`(在 PATH 内);裸 `go install .` 会装到 `$GOPATH/bin`(`~/go/bin`,不在 PATH),导致改完代码后 `agentsync --check` 仍跑旧版、看不到新行为。排查“改了没生效”前先确认跑的是哪个二进制。
+- `agentsync --check` 是只读检查;涉及真实用户目录的验证前,先确认不会覆盖未备份内容。
+- 功能新增 / 缺陷修复验证通过后,按全局规范默认走完整发布流程:提交 → 打 `v*` tag → 推送 → tag 触发 GitHub Actions(GoReleaser)构建产物并自动更新 `x0c/homebrew-tap` 的 cask。用 `gh run list` / `gh release list` 确认远端 Release 成功、cask 版本已跟随。
 
 ## 文档导航
 
