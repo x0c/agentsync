@@ -43,21 +43,20 @@ flowchart TD
 | 类型 | 路径 | 说明 |
 |---|---|---|
 | 规范统一源 | `~/.config/agentsync/AGENTS.md` | 所有工具共享的指令文件 |
-| Codex 规范入口 | `~/.codex/AGENTS.md` | 指向统一源 |
-| OpenCode 规范入口 | `~/.config/opencode/AGENTS.md` | 指向统一源 |
-| Claude 规范入口 | `~/.claude/CLAUDE.md` | 指向统一源或受管副本 |
-| Grok 规范入口 | `~/.grok/AGENTS.md` | 指向统一源 |
-| Kimi Code 规范入口 | `~/.kimi-code/AGENTS.md` | 指向统一源 |
-| 通用跨工具规范入口 | `~/.agents/AGENTS.md` | 指向统一源，供遵循该通用约定的工具共享 |
 | Skill 统一源 | `~/.config/agentsync/skills` | 每个子目录是一个完整 skill |
-| Claude Skill 入口 | `~/.claude/skills` | 整体指向 Skill 统一源 |
-| Codex Skill 入口 | `~/.codex/skills` | 整体指向 Skill 统一源 |
-| OpenCode Skill 入口 | `~/.config/opencode/skill` | 整体指向 Skill 统一源 |
-| Grok Skill 入口 | `~/.grok/skills` | 整体指向 Skill 统一源 |
-| Kimi Code Skill 入口 | `~/.kimi-code/skills` | 整体指向 Skill 统一源 |
-| 通用跨工具 Skill 入口 | `~/.agents/skills` | 整体指向 Skill 统一源 |
 
-第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态。第二次运行应收敛到 `ok`，这是幂等性判断的主要用户信号。
+规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
+
+```text
+规范入口：  ~/.codex/AGENTS.md、~/.claude/CLAUDE.md、~/.gemini/GEMINI.md、
+            ~/.qwen/QWEN.md、~/.joycode/AGENTS.md …（指向规范统一源）
+Skill 入口：~/.codex/skills、~/.config/opencode/skills、~/.joycode/skills …
+            （整体指向 Skill 统一源）
+```
+
+**按安装门控**：每个入口只在对应工具已安装（其用户级主目录如 `~/.codex`、`~/.joycode` 存在）时才收敛；未安装的工具报告为 `skipped`，不创建任何文件。因此在同一台机器上 `Results` / `Skills` 里出现的入口取决于你实际装了哪些工具。
+
+第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态，未装的工具显示 `skipped`。第二次运行已安装工具应收敛到 `ok`，这是幂等性判断的主要用户信号。
 
 ## 检查模式
 
@@ -65,6 +64,7 @@ flowchart TD
 
 | 状态 | 含义 | 下一步 |
 |---|---|---|
+| `skipped` | 该工具未安装（`Detect` 主目录不存在） | 无需处理；装了该工具再跑一次即可收敛 |
 | `ok` | 入口已指向统一源 | 无需处理 |
 | `missing` | 统一源或目标入口缺失 | 直接运行 `agentsync` 创建 |
 | `mergeable` | 目标文件有独特内容，可合并进统一源 | 运行 `agentsync`，必要时检查合并结果 |

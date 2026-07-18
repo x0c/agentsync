@@ -64,7 +64,7 @@ func syncSkills(cfg Config, opts Options) ([]TargetResult, []string, error) {
 	}
 
 	for _, target := range cfg.SkillTargets {
-		result, backup, err := syncSkillRoot(cfg.SkillSource, target.Path, opts)
+		result, backup, err := syncSkillRoot(cfg.SkillSource, target, opts)
 		if err != nil {
 			return results, backups, err
 		}
@@ -228,8 +228,15 @@ func sortedSkillNames(skills map[string]string) []string {
 	return names
 }
 
-func syncSkillRoot(source, target string, opts Options) (TargetResult, string, error) {
+func syncSkillRoot(source string, targetSpec SkillTarget, opts Options) (TargetResult, string, error) {
+	target := targetSpec.Path
 	result := TargetResult{Path: target}
+	// runtime 未安装时跳过，不创建其 skill 根目录别名。
+	if targetSpec.Detect != "" && !pathExists(targetSpec.Detect) {
+		result.Status = "skipped"
+		result.Detail = "runtime not installed"
+		return result, "", nil
+	}
 	if !pathExists(target) {
 		if opts.Check {
 			result.Status = "missing"

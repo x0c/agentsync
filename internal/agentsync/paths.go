@@ -16,21 +16,62 @@ func defaultGlobalConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	// 每个 runtime 一条：Detect 是该工具的用户级主目录，只有它已存在（即用户装了该工具）
+	// 才会为其创建规范入口 / skill 根目录别名；未安装的工具一律跳过，不留任何文件。
 	targets := []Target{
-		{Path: "~/.codex/AGENTS.md", Mode: "link"},
-		{Path: "~/.config/opencode/AGENTS.md", Mode: "link"},
-		{Path: "~/.claude/CLAUDE.md", Mode: "claude"},
-		{Path: "~/.grok/AGENTS.md", Mode: "link"},
-		{Path: "~/.kimi-code/AGENTS.md", Mode: "link"},
-		{Path: "~/.agents/AGENTS.md", Mode: "link"},
+		// 头部 CLI Agent
+		{Path: "~/.codex/AGENTS.md", Mode: "link", Detect: "~/.codex"},
+		{Path: "~/.config/opencode/AGENTS.md", Mode: "link", Detect: "~/.config/opencode"},
+		{Path: "~/.claude/CLAUDE.md", Mode: "claude", Detect: "~/.claude"},
+		{Path: "~/.gemini/GEMINI.md", Mode: "link", Detect: "~/.gemini"},
+		{Path: "~/.qwen/QWEN.md", Mode: "link", Detect: "~/.qwen"},
+		{Path: "~/.copilot/copilot-instructions.md", Mode: "link", Detect: "~/.copilot"},
+		{Path: "~/.kimi-code/AGENTS.md", Mode: "link", Detect: "~/.kimi-code"},
+		// 开源 / 独立 CLI Agent
+		{Path: "~/.grok/AGENTS.md", Mode: "link", Detect: "~/.grok"},
+		{Path: "~/.config/amp/AGENTS.md", Mode: "link", Detect: "~/.config/amp"},
+		{Path: "~/.config/crush/CRUSH.md", Mode: "link", Detect: "~/.config/crush"},
+		{Path: "~/.config/goose/AGENTS.md", Mode: "link", Detect: "~/.config/goose"},
+		{Path: "~/.factory/AGENTS.md", Mode: "link", Detect: "~/.factory"},
+		{Path: "~/.iflow/IFLOW.md", Mode: "link", Detect: "~/.iflow"},
+		{Path: "~/.config/kilo/AGENTS.md", Mode: "link", Detect: "~/.config/kilo"},
+		// IDE / 编辑器系 Agent
+		{Path: "~/.codeium/windsurf/memories/global_rules.md", Mode: "link", Detect: "~/.codeium/windsurf"},
+		{Path: "~/.config/zed/AGENTS.md", Mode: "link", Detect: "~/.config/zed"},
+		// 大厂自研 Agent
+		{Path: "~/.codebuddy/CODEBUDDY.md", Mode: "link", Detect: "~/.codebuddy"},
+		{Path: "~/.qoder/AGENTS.md", Mode: "link", Detect: "~/.qoder"},
+		{Path: "~/.junie/AGENTS.md", Mode: "link", Detect: "~/.junie"},
+		{Path: "~/.kiro/steering/AGENTS.md", Mode: "link", Detect: "~/.kiro"},
+		{Path: "~/.joycode/AGENTS.md", Mode: "link", Detect: "~/.joycode"},
+		// 通用跨工具入口（约定俗成的 ~/.agents，仅在用户已建立时才收敛）
+		{Path: "~/.agents/AGENTS.md", Mode: "link", Detect: "~/.agents"},
 	}
 	skillTargets := []SkillTarget{
-		{Path: "~/.claude/skills"},
-		{Path: "~/.codex/skills"},
-		{Path: "~/.config/opencode/skill"},
-		{Path: "~/.grok/skills"},
-		{Path: "~/.kimi-code/skills"},
-		{Path: "~/.agents/skills"},
+		// 头部 CLI Agent
+		{Path: "~/.claude/skills", Detect: "~/.claude"},
+		{Path: "~/.codex/skills", Detect: "~/.codex"},
+		{Path: "~/.config/opencode/skills", Detect: "~/.config/opencode"},
+		{Path: "~/.qwen/skills", Detect: "~/.qwen"},
+		{Path: "~/.copilot/skills", Detect: "~/.copilot"},
+		{Path: "~/.kimi-code/skills", Detect: "~/.kimi-code"},
+		// 开源 / 独立 CLI Agent
+		{Path: "~/.grok/skills", Detect: "~/.grok"},
+		{Path: "~/.config/amp/skills", Detect: "~/.config/amp"},
+		{Path: "~/.config/crush/skills", Detect: "~/.config/crush"},
+		{Path: "~/.factory/skills", Detect: "~/.factory"},
+		{Path: "~/.iflow/skills", Detect: "~/.iflow"},
+		{Path: "~/.aider-desk/skills", Detect: "~/.aider-desk"},
+		// IDE / 编辑器系 Agent
+		{Path: "~/.cursor/skills", Detect: "~/.cursor"},
+		{Path: "~/.codeium/windsurf/skills", Detect: "~/.codeium/windsurf"},
+		// 大厂自研 Agent
+		{Path: "~/.codebuddy/skills", Detect: "~/.codebuddy"},
+		{Path: "~/.qoder/skills", Detect: "~/.qoder"},
+		{Path: "~/.kiro/skills", Detect: "~/.kiro"},
+		{Path: "~/.joycode/skills", Detect: "~/.joycode"},
+		// 通用跨工具入口
+		{Path: "~/.agents/skills", Detect: "~/.agents"},
 	}
 	for i := range targets {
 		p, err := expandPath(targets[i].Path)
@@ -38,6 +79,11 @@ func defaultGlobalConfig() (Config, error) {
 			return Config{}, err
 		}
 		targets[i].Path = p
+		d, err := expandPath(targets[i].Detect)
+		if err != nil {
+			return Config{}, err
+		}
+		targets[i].Detect = d
 	}
 	for i := range skillTargets {
 		p, err := expandPath(skillTargets[i].Path)
@@ -45,6 +91,11 @@ func defaultGlobalConfig() (Config, error) {
 			return Config{}, err
 		}
 		skillTargets[i].Path = p
+		d, err := expandPath(skillTargets[i].Detect)
+		if err != nil {
+			return Config{}, err
+		}
+		skillTargets[i].Detect = d
 	}
 	return Config{Source: source, Targets: targets, SkillSource: skillSource, SkillTargets: skillTargets}, nil
 }

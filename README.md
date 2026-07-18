@@ -4,7 +4,11 @@ English | [简体中文](README.zh-CN.md)
 
 `agentsync` is a small Go CLI that keeps AI coding-agent instructions and reusable skills in one canonical place.
 
-It prevents drift between tools such as Codex, Claude Code, OpenCode, Grok, and Kimi Code by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
+It prevents drift across many AI coding agents — Codex, Claude Code, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and more — by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
+
+## Only Touches Installed Runtimes
+
+Each supported runtime is gated on its own home directory (for example `~/.codex`, `~/.gemini`, `~/.joycode`). If that directory does not exist, agentsync treats the runtime as **not installed** and reports it as `skipped` — it never creates directories or alias files for tools you do not use. Install a new agent, run `agentsync` again, and it converges on the next pass.
 
 ## What It Manages
 
@@ -14,14 +18,30 @@ Canonical instruction file:
 ~/.config/agentsync/AGENTS.md
 ```
 
-Tool-specific instruction aliases:
+Tool-specific instruction aliases (created only when the runtime is installed):
 
 ```text
 ~/.codex/AGENTS.md
 ~/.config/opencode/AGENTS.md
 ~/.claude/CLAUDE.md
-~/.grok/AGENTS.md
+~/.gemini/GEMINI.md
+~/.qwen/QWEN.md
+~/.copilot/copilot-instructions.md
 ~/.kimi-code/AGENTS.md
+~/.grok/AGENTS.md
+~/.config/amp/AGENTS.md
+~/.config/crush/CRUSH.md
+~/.config/goose/AGENTS.md
+~/.factory/AGENTS.md
+~/.iflow/IFLOW.md
+~/.config/kilo/AGENTS.md
+~/.codeium/windsurf/memories/global_rules.md
+~/.config/zed/AGENTS.md
+~/.codebuddy/CODEBUDDY.md
+~/.qoder/AGENTS.md
+~/.junie/AGENTS.md
+~/.kiro/steering/AGENTS.md
+~/.joycode/AGENTS.md
 ~/.agents/AGENTS.md
 ```
 
@@ -31,15 +51,19 @@ Canonical skill directory:
 ~/.config/agentsync/skills/<skill-name>/SKILL.md
 ```
 
-Tool-specific skill aliases:
+Tool-specific skill aliases (created only when the runtime is installed), each pointing at `~/.config/agentsync/skills`:
 
 ```text
-~/.claude/skills -> ~/.config/agentsync/skills
-~/.codex/skills -> ~/.config/agentsync/skills
-~/.config/opencode/skill -> ~/.config/agentsync/skills
-~/.grok/skills -> ~/.config/agentsync/skills
-~/.kimi-code/skills -> ~/.config/agentsync/skills
-~/.agents/skills -> ~/.config/agentsync/skills
+~/.claude/skills          ~/.config/amp/skills
+~/.codex/skills           ~/.config/crush/skills
+~/.config/opencode/skills ~/.factory/skills
+~/.qwen/skills            ~/.iflow/skills
+~/.copilot/skills         ~/.aider-desk/skills
+~/.kimi-code/skills       ~/.cursor/skills
+~/.grok/skills            ~/.codeium/windsurf/skills
+~/.codebuddy/skills       ~/.qoder/skills
+~/.kiro/skills            ~/.joycode/skills
+~/.agents/skills
 ```
 
 Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately.

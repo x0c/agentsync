@@ -4,7 +4,11 @@
 
 `agentsync` 是一个小型 Go CLI，用来把 AI coding agent 的全局指令和可复用 Skill 统一收敛到一个源目录。
 
-它解决 Codex、Claude Code、OpenCode、Grok、Kimi Code 各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
+它解决 Codex、Claude Code、OpenCode、Gemini CLI、Qwen Code、Copilot CLI、Kimi Code、Grok、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
+
+## 只处理已安装的工具
+
+每个受支持的工具都用它自己的主目录（如 `~/.codex`、`~/.gemini`、`~/.joycode`）做安装判断。如果该目录不存在，agentsync 视为该工具**未安装**，报告为 `skipped`，绝不会为你没用的工具创建目录或入口文件。装了新工具后再次运行 `agentsync`，下一轮自动收敛。
 
 ## 管理对象
 
@@ -14,14 +18,30 @@
 ~/.config/agentsync/AGENTS.md
 ```
 
-工具侧指令入口：
+工具侧指令入口（仅在对应工具已安装时创建）：
 
 ```text
 ~/.codex/AGENTS.md
 ~/.config/opencode/AGENTS.md
 ~/.claude/CLAUDE.md
-~/.grok/AGENTS.md
+~/.gemini/GEMINI.md
+~/.qwen/QWEN.md
+~/.copilot/copilot-instructions.md
 ~/.kimi-code/AGENTS.md
+~/.grok/AGENTS.md
+~/.config/amp/AGENTS.md
+~/.config/crush/CRUSH.md
+~/.config/goose/AGENTS.md
+~/.factory/AGENTS.md
+~/.iflow/IFLOW.md
+~/.config/kilo/AGENTS.md
+~/.codeium/windsurf/memories/global_rules.md
+~/.config/zed/AGENTS.md
+~/.codebuddy/CODEBUDDY.md
+~/.qoder/AGENTS.md
+~/.junie/AGENTS.md
+~/.kiro/steering/AGENTS.md
+~/.joycode/AGENTS.md
 ~/.agents/AGENTS.md
 ```
 
@@ -31,15 +51,19 @@
 ~/.config/agentsync/skills/<skill-name>/SKILL.md
 ```
 
-工具侧 Skill 入口：
+工具侧 Skill 入口（仅在对应工具已安装时创建），均整体指向 `~/.config/agentsync/skills`：
 
 ```text
-~/.claude/skills -> ~/.config/agentsync/skills
-~/.codex/skills -> ~/.config/agentsync/skills
-~/.config/opencode/skill -> ~/.config/agentsync/skills
-~/.grok/skills -> ~/.config/agentsync/skills
-~/.kimi-code/skills -> ~/.config/agentsync/skills
-~/.agents/skills -> ~/.config/agentsync/skills
+~/.claude/skills          ~/.config/amp/skills
+~/.codex/skills           ~/.config/crush/skills
+~/.config/opencode/skills ~/.factory/skills
+~/.qwen/skills            ~/.iflow/skills
+~/.copilot/skills         ~/.aider-desk/skills
+~/.kimi-code/skills       ~/.cursor/skills
+~/.grok/skills            ~/.codeium/windsurf/skills
+~/.codebuddy/skills       ~/.qoder/skills
+~/.kiro/skills            ~/.joycode/skills
+~/.agents/skills
 ```
 
 每个 Skill 在统一 Skill 根目录下按完整目录管理。目录内必须包含 `SKILL.md`，旁边的脚本、模板、参考资料和资源文件会一起保留。由于工具侧 Skill 根目录整体指向统一根目录，新增、删除或重命名统一源中的 Skill 会立即反映到所有工具侧。

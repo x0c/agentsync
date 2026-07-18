@@ -126,6 +126,12 @@ func readableContentPath(path string) string {
 
 func syncTarget(source string, target Target, opts Options) (TargetResult, string, error) {
 	result := TargetResult{Path: target.Path}
+	// runtime 未安装（标志目录不存在）时直接跳过，绝不为其创建目录或文件。
+	if target.Detect != "" && !pathExists(target.Detect) {
+		result.Status = "skipped"
+		result.Detail = "runtime not installed"
+		return result, "", nil
+	}
 	if !pathExists(target.Path) {
 		if opts.Check {
 			result.Status = "missing"

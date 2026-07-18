@@ -24,8 +24,9 @@ agentsync 的同步机制围绕“统一源”和“工具入口”展开。统�
 
 - 规范统一源：`~/.config/agentsync/AGENTS.md`。
 - Skill 统一源：`~/.config/agentsync/skills`。
-- 规范目标入口：Codex、OpenCode、Claude Code、Grok、Kimi Code 的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。
+- 规范目标入口：Codex、OpenCode、Claude Code、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等工具的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。完整清单见 `defaultGlobalConfig()`。
 - Skill 目标入口：各工具的用户 skill 根目录。
+- 安装门控（Detect）：每个规范/Skill 入口都带一个 `Detect` 标志目录，取该工具的用户级主目录（如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，`syncTarget()` / `syncSkillRoot()` 直接返回 `skipped`，不创建任何目录或文件。这样一台机器上只会为真正装了的工具建立入口。
 - 仓库级源：当前 Git 仓库的 `AGENTS.md`。
 - 仓库级目标：当前 Git 仓库的 `CLAUDE.md`。
 - 备份目录：`~/.config/agentsync/backups/`，由路径清洗后的目标路径和时间戳组成。
@@ -52,19 +53,22 @@ flowchart TD
     Root --> Alias
 ```
 
+下图仅画出部分入口，完整清单以 `defaultGlobalConfig()` 为准；每条边只有在对应工具已安装（`Detect` 标志目录存在）时才会真正建立。
+
 ```mermaid
 flowchart LR
     Source[规范统一源 AGENTS.md] --> Codex[~/.codex/AGENTS.md]
     Source --> OpenCode[~/.config/opencode/AGENTS.md]
     Source --> Claude[~/.claude/CLAUDE.md]
-    Source --> Grok[~/.grok/AGENTS.md]
-    Source --> Kimi[~/.kimi-code/AGENTS.md]
+    Source --> Gemini[~/.gemini/GEMINI.md]
+    Source --> JoyCode[~/.joycode/AGENTS.md]
+    Source --> Etc1[... 其余工具]
     Source --> Agents[~/.agents/AGENTS.md]
     SkillSource[Skill 统一源 skills/] --> ClaudeSkills[~/.claude/skills]
     SkillSource --> CodexSkills[~/.codex/skills]
-    SkillSource --> OpenCodeSkills[~/.config/opencode/skill]
-    SkillSource --> GrokSkills[~/.grok/skills]
-    SkillSource --> KimiSkills[~/.kimi-code/skills]
+    SkillSource --> OpenCodeSkills[~/.config/opencode/skills]
+    SkillSource --> JoyCodeSkills[~/.joycode/skills]
+    SkillSource --> Etc2[... 其余工具]
     SkillSource --> AgentsSkills[~/.agents/skills]
 ```
 
@@ -80,7 +84,7 @@ flowchart LR
 6. 目标是错误链接、断链、普通文件或可替换文件时，按检查模式/真实模式分支处理。
 7. 真实模式下，替换前先备份；有独特内容时先追加到统一源或生成合并草稿。
 
-`syncTarget()` 是规范文件收敛中最复杂的状态机，状态包括 `missing`、`ok`、`broken-link`、`wrong-link`、`blocked`、`replaceable`、`mergeable`、`linked`、`repaired`、`replaced`、`merged`。
+`syncTarget()` 是规范文件收敛中最复杂的状态机，状态包括 `skipped`（runtime 未安装）、`missing`、`ok`、`broken-link`、`wrong-link`、`blocked`、`replaceable`、`mergeable`、`linked`、`repaired`、`replaced`、`merged`。其中 `skipped` 在方法最前面判定：`target.Detect` 非空且标志目录不存在时立即返回，不进入后续任何写路径。
 
 ### Skill 根目录收敛
 
@@ -138,8 +142,8 @@ CLAUDE.md -> AGENTS.md
 |---|---|---|---|
 | 规范统一源 | `~/.config/agentsync/AGENTS.md` | 用户级指令唯一真实内容 | 不存在时可从已有工具入口导入 |
 | Skill 统一源 | `~/.config/agentsync/skills` | 所有工具共享的 skill 根目录 | 子目录必须包含 `SKILL.md` 才算 skill |
-| 工具规范入口 | Codex/OpenCode/Claude/Grok/Kimi Code 全局指令文件，及通用 `~/.agents/AGENTS.md` | 工具读取规范的入口 | 可为 symlink、hardlink 或受管副本 |
-| 工具 Skill 入口 | 各工具 skill 根目录 | 工具发现 skill 的入口 | 新版策略是根目录整体别名 |
+| 工具规范入口 | Codex/OpenCode/Claude/Gemini/Qwen/Copilot/Kimi Code/Grok/Amp/Crush/Goose/Factory/iFlow/Kilo/Windsurf/Zed/CodeBuddy/Qoder/Junie/Kiro/JoyCode 全局指令文件，及通用 `~/.agents/AGENTS.md`（完整清单见 `defaultGlobalConfig()`） | 工具读取规范的入口 | 可为 symlink、hardlink 或受管副本；工具未安装（`Detect` 目录缺失）时不创建 |
+| 工具 Skill 入口 | 各工具 skill 根目录 | 工具发现 skill 的入口 | 新版策略是根目录整体别名；工具未安装时不创建 |
 | 仓库级入口 | `AGENTS.md`、`CLAUDE.md` | 项目文档入口 | `CLAUDE.md` 应只指向 `AGENTS.md` |
 | 备份 | `~/.config/agentsync/backups/` | 替换前恢复点 | 替换文件和目录前必须写备份 |
 | 合并草稿 | `~/.config/agentsync/merge-drafts/` | 人工整理冲突内容 | 采纳后会替换统一源 |
@@ -158,6 +162,7 @@ CLAUDE.md -> AGENTS.md
 ## §6 核心规则与隐性约束
 
 - **AI 易错点**【检查模式】`--check` 必须只读。新增分支时，所有写文件、建目录、备份、删除、复制、重命名动作都必须被 `opts.Check` 拦住，否则预览命令会真实改用户目录。
+- **AI 易错点**【按安装门控】每个规范/Skill 入口都带 `Detect` 标志目录（工具用户级主目录）。`syncTarget()` / `syncSkillRoot()` 必须在最前面判断：`Detect` 非空且目录不存在时返回 `skipped`，绝不为未安装的工具创建目录或文件。新增 runtime 时忘了给 `Detect`，会退化成“无条件为所有工具建目录”，正是本设计要避免的。`Detect` 用主目录而非 skill 子目录（工具装了但还没建 skill 目录时也应正常收敛）。
 - **AI 易错点**【先导入再替换】替换现有规范文件或 Skill 目录前，必须先把可保留内容导入统一源或写入备份；不能为了“简化”直接删除目标入口。
 - **AI 易错点**【Skill 根目录策略】工具侧 Skill 入口是整个根目录指向统一源，不是每个 skill 单独建链接。回退到逐个 skill 链接会重新引入删除/重命名不同步问题。
 - **AI 易错点**【隐藏 Skill 目录】以点开头的隐藏 Skill 目录不参与普通 skill 发现，但要通过 `preserveHiddenSkillEntries()` 复制到统一源。忽略它会丢掉 Codex `.system` 这类工具内部 skill。
@@ -213,9 +218,10 @@ agentsync --check
 
 检查点：
 
-- `Skills` 区块能报告 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skill`、`~/.grok/skills`、`~/.kimi-code/skills`、`~/.agents/skills`。
+- `Skills` 区块对已安装工具报告其 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.agents/skills` 等）。
 - 已整体指向统一源时应显示 `ok` 或 skill directory symlink。
 - 真实目录但可替换时应显示 `replaceable`，真实运行前会备份。
+- 未安装工具（`Detect` 目录缺失）应显示 `skipped (runtime not installed)`，且不产生任何写入。
 
 ### 发布配置验证
 

@@ -277,6 +277,48 @@ func TestSkillSyncMaterializesCanonicalSymlink(t *testing.T) {
 	}
 }
 
+func TestUninstalledRuntimeIsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	installed := filepath.Join(dir, "installed")
+	if err := os.MkdirAll(installed, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	missingRuntime := filepath.Join(dir, "missing")
+	cfg := Config{
+		Source: filepath.Join(dir, "source", "AGENTS.md"),
+		Targets: []Target{
+			{Path: filepath.Join(installed, "AGENTS.md"), Mode: "link", Detect: installed},
+			{Path: filepath.Join(missingRuntime, "AGENTS.md"), Mode: "link", Detect: missingRuntime},
+		},
+		SkillSource: filepath.Join(dir, "agentsync", "skills"),
+		SkillTargets: []SkillTarget{
+			{Path: filepath.Join(installed, "skills"), Detect: installed},
+			{Path: filepath.Join(missingRuntime, "skills"), Detect: missingRuntime},
+		},
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	// 未安装的 runtime 目录不能被创建，也不能生成任何入口文件。
+	if pathExists(missingRuntime) {
+		t.Fatalf("未安装 runtime 的目录被创建了: %s", missingRuntime)
+	}
+	if !symlinkPointsTo(cfg.Targets[0].Path, cfg.Source) && !sameContent(cfg.Source, cfg.Targets[0].Path) {
+		t.Fatalf("已安装 runtime 未被收敛; report=%+v", report)
+	}
+	skipped := 0
+	for _, r := range append(report.Results, report.SkillResults...) {
+		if r.Status == "skipped" {
+			skipped++
+		}
+	}
+	if skipped != 2 {
+		t.Fatalf("应有 2 条 skipped 记录（规范入口+skill 入口），实际 %d; report=%+v", skipped, report)
+	}
+}
+
 func TestDefaultGlobalConfigIncludesKimiCode(t *testing.T) {
 	cfg, err := defaultGlobalConfig()
 	if err != nil {
@@ -300,6 +342,36 @@ func TestDefaultGlobalConfigIncludesGenericAgents(t *testing.T) {
 	}
 	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".agents", "skills")) {
 		t.Fatalf("通用跨工具 Skill 入口缺失: %+v", cfg.SkillTargets)
+	}
+}
+
+func TestDefaultGlobalConfigIncludesJoyCode(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".joycode", "AGENTS.md")) {
+		t.Fatalf("JoyCode 规范入口缺失: %+v", cfg.Targets)
+	}
+	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".joycode", "skills")) {
+		t.Fatalf("JoyCode Skill 入口缺失: %+v", cfg.SkillTargets)
+	}
+}
+
+func TestDefaultGlobalConfigGatesEveryTarget(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	for _, tgt := range cfg.Targets {
+		if tgt.Detect == "" {
+			t.Fatalf("规范入口缺少 Detect 门控: %s", tgt.Path)
+		}
+	}
+	for _, tgt := range cfg.SkillTargets {
+		if tgt.Detect == "" {
+			t.Fatalf("Skill 入口缺少 Detect 门控: %s", tgt.Path)
+		}
 	}
 }
 
