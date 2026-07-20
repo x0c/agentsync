@@ -4,7 +4,7 @@
 
 `agentsync` 是一个小型 Go CLI，用来把 AI coding agent 的全局指令和可复用 Skill 统一收敛到一个源目录。
 
-它解决 Codex、Claude Code、OpenCode、Gemini CLI、Qwen Code、Copilot CLI、Kimi Code、Grok、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
+它解决 Codex、Claude Code、OpenCode、Gemini CLI、Qwen Code、Copilot CLI、Kimi Code、Grok、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
 
 ## 只处理已安装的工具
 
@@ -35,6 +35,7 @@
 ~/.factory/AGENTS.md
 ~/.iflow/IFLOW.md
 ~/.config/kilo/AGENTS.md
+~/.cursor/rules/AGENTS.mdc
 ~/.codeium/windsurf/memories/global_rules.md
 ~/.config/zed/AGENTS.md
 ~/.codebuddy/CODEBUDDY.md
@@ -44,6 +45,8 @@
 ~/.joycode/AGENTS.md
 ~/.agents/AGENTS.md
 ```
+
+Cursor 入口是带 `alwaysApply: true` frontmatter 的受管 `.mdc`（不是裸 symlink）——Cursor 会忽略没有 frontmatter 的规则文件。若 Settings 已列出该规则但 Agent 会话复述不出正文，多半是 Cursor 在 home workspace / Agents Window 下未注入 file-backed 规则；请打开具体项目再试，或把关键段贴进 Settings → User Rules（详见 `docs/AGENTSYNC_GUIDE.md`）。
 
 统一 Skill 目录：
 

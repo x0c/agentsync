@@ -42,7 +42,7 @@
 
 | 工具 | 用户级（全局）规则/记忆文件 | 项目级规则文件 | 全局 Skill 目录 | 全局其他目录 |
 |---|---|---|---|---|
-| **Cursor（IDE）** | **无官方磁盘文件**——User Rules 在 Settings → Rules 面板配置（`~/.cursor/rules/` 官方不支持；变通：`~/.cursor/plugins/local/<插件>/rules/` 放 .mdc） | `.cursor/rules/`（.md/.mdc + frontmatter）；官方支持 `AGENTS.md`；旧 `.cursorrules` 向后兼容 | `~/.cursor/skills/`、`~/.agents/skills/`（兼容 `~/.claude/skills/`、`~/.codex/skills/`） | 子代理 `~/.cursor/agents/`；命令 `~/.cursor/commands/`（已并入 skills）；本地插件 `~/.cursor/plugins/local/` |
+| **Cursor（IDE）** | Settings → Rules 的 User Rules 走云端/内部 DB（非公开单文件，跨项目最稳）；**文件型全局规则** `~/.cursor/rules/*.mdc`（Cursor 员工 2026-01 确认路径存在；agentsync 写 `AGENTS.mdc` + `alwaysApply: true`）。**注意**：Settings 列出 ≠ Agent 已注入——Agents Window 以 `$HOME` 为 workspace、或未打开具体项目时，file-backed 规则常不进系统提示（论坛 2026-04 员工确认类 bug / expected）；Skills 发现路径不同，可单独生效。官方 docs 仍把「全局偏好」主推为 Customize → User Rules 纯文本 | `.cursor/rules/`（.md/.mdc + frontmatter）；官方支持 `AGENTS.md`；旧 `.cursorrules` 向后兼容 | `~/.cursor/skills/`、`~/.agents/skills/`（兼容 `~/.claude/skills/`、`~/.codex/skills/`） | 子代理 `~/.cursor/agents/`；命令 `~/.cursor/commands/`（已并入 skills）；本地插件 `~/.cursor/plugins/local/` |
 | **Cursor CLI（cursor-agent）** | 无官方全局规则文件；全局配置 `~/.cursor/cli-config.json`（Win `%USERPROFILE%\.cursor\cli-config.json`；`CURSOR_CONFIG_DIR` 覆盖） | 与编辑器同一套：`.cursor/rules/`、`AGENTS.md` | 共享 `~/.cursor/skills/` 体系 | 项目配置 `<项目>/.cursor/cli.json` |
 | **Windsurf（Codeium / Devin Desktop）** | `~/.codeium/windsurf/memories/global_rules.md`（6000 字符上限，Always-On）；自动记忆 `~/.codeium/windsurf/memories/` | `.devin/rules/*.md`（首选）→ `.windsurf/rules/*.md`（回退）；旧 `.windsurfrules` 仍读；`AGENTS.md`（根=always-on，子目录=auto-glob） | `~/.codeium/windsurf/skills/<名>/SKILL.md`（兼容 `~/.agents/skills/`、`.agents/skills/`） | 全局工作流 `~/.codeium/windsurf/global_workflows/`；企业系统级 `/etc/devin/rules/`（Linux）等 |
 | **Cline** | 全局规则目录 `~/Documents/Cline/Rules`（Win `Documents\Cline\Rules`；找不到时试 `~/Cline/Rules`）；另读 `~/.agents/AGENTS.md` | `.clinerules/`（支持 `paths:` 条件）；自动检测 `.cursorrules`、`.windsurfrules`、`AGENTS.md` | `~/.cline/skills/`（Win `C:\Users\<用户名>\.cline\skills\`） | 全局工作流 `~/Documents/Cline/Workflows`；CLI 全局 MCP `~/.cline/mcp.json` |
@@ -117,6 +117,7 @@
 | joycode-cli | 不存在官方独立 CLI，JoyCode 仅 IDE + VS Code 插件形态 |
 | Grok CLI | xAI 无官方 CLI，表中为主流社区实现 superagent-ai/grok-cli |
 | Claude Code `~/.claude/commands/` | 命令已并入 skills，新版文档未单列用户级命令目录（旧文档曾明确，高置信仍存在） |
+| Cursor `~/.cursor/rules/` 注入 | 路径与 Settings 展示已确认；Agent 自动注入在 Agents Window / home workspace 下不可靠（Settings 可见、提示词无正文）。另有 `alwaysApply: true` 被降成 requestable 的客户端 bug（社区称 3.2 修复）。验证：新开 Agent 问能否复述规则正文，勿仅看 Settings。可靠 workaround：打开具体项目 workspace；或把关键段贴进 Settings → User Rules；或聊天 `@` 该 `.mdc` |
 
 ## 三、调研方法与来源
 - 方法：6 路并行调研（Anthropic/OpenAI 系、开源 CLI、IDE 系、大厂自研、新兴独立、中文社区交叉验证），累计 200+ 次检索，全部关键路径以官方文档原文核实（code.claude.com、developers.openai.com、docs.github.com、opencode.ai、cursor.com、docs.windsurf.com、kiro.dev、codebuddy.ai、docs.qoder.com、kimi.com/code/docs、joycode.jd.com 等）。

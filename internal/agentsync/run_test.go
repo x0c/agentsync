@@ -358,6 +358,217 @@ func TestDefaultGlobalConfigIncludesJoyCode(t *testing.T) {
 	}
 }
 
+func TestDefaultGlobalConfigIncludesCursor(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	var cursorTarget *Target
+	for i := range cfg.Targets {
+		if strings.HasSuffix(cfg.Targets[i].Path, filepath.Join(".cursor", "rules", "AGENTS.mdc")) {
+			cursorTarget = &cfg.Targets[i]
+			break
+		}
+	}
+	if cursorTarget == nil {
+		t.Fatalf("Cursor 规范入口缺失: %+v", cfg.Targets)
+	}
+	if cursorTarget.Mode != "cursor" {
+		t.Fatalf("Cursor 规范入口 Mode 应为 cursor，实际 %q", cursorTarget.Mode)
+	}
+	if !strings.HasSuffix(cursorTarget.Detect, filepath.Join(".cursor")) {
+		t.Fatalf("Cursor Detect 应为 ~/.cursor，实际 %q", cursorTarget.Detect)
+	}
+	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".cursor", "skills")) {
+		t.Fatalf("Cursor Skill 入口缺失: %+v", cfg.SkillTargets)
+	}
+}
+
+func TestCursorRuleCreatesFrontmatterAndIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	cursorHome := filepath.Join(dir, ".cursor")
+	if err := os.MkdirAll(cursorHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source: filepath.Join(dir, "source", "AGENTS.md"),
+		Targets: []Target{
+			{Path: filepath.Join(cursorHome, "rules", "AGENTS.mdc"), Mode: "cursor", Detect: cursorHome},
+		},
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.Source, []byte("# hello\nkeep rules short\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	data, err := os.ReadFile(cfg.Targets[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	if !strings.HasPrefix(got, "---\n") || !strings.Contains(got, "alwaysApply: true") {
+		t.Fatalf("cursor rule missing frontmatter: %q; report=%+v", got, report)
+	}
+	if !sameContent(cfg.Source, cfg.Targets[0].Path) {
+		t.Fatalf("cursor rule payload does not match source: %q", got)
+	}
+	if !strings.Contains(got, "keep rules short") {
+		t.Fatalf("cursor rule missing source body: %q", got)
+	}
+
+	report, err = syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("second syncConfig() error = %v", err)
+	}
+	for _, result := range report.Results {
+		if result.Path == cfg.Targets[0].Path && result.Status != "ok" {
+			t.Fatalf("second run should be idempotent, got %+v", report.Results)
+		}
+	}
+}
+
+func TestStaleManagedCursorRuleDoesNotPolluteSource(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	cursorHome := filepath.Join(dir, ".cursor")
+	if err := os.MkdirAll(cursorHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source: filepath.Join(dir, "source", "AGENTS.md"),
+		Targets: []Target{
+			{Path: filepath.Join(cursorHome, "rules", "AGENTS.mdc"), Mode: "cursor", Detect: cursorHome},
+		},
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.Source, []byte("# v1\nold body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("initial syncConfig() error = %v", err)
+	}
+
+	// 统一源已前进；Cursor 受管副本仍是旧正文。再同步不得把旧正文 append 回统一源。
+	if err := os.WriteFile(cfg.Source, []byte("# v2\nnew body with extra section\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("resync after source edit error = %v", err)
+	}
+	source, err := os.ReadFile(cfg.Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(source)
+	if strings.Contains(got, "agentsync:begin import") || strings.Contains(got, "Imported From") {
+		t.Fatalf("stale cursor rule was imported into source: %q; report=%+v", got, report)
+	}
+	if strings.Contains(got, "old body") {
+		t.Fatalf("source polluted with stale cursor body: %q; report=%+v", got, report)
+	}
+	if !strings.Contains(got, "new body with extra section") {
+		t.Fatalf("source lost new content: %q", got)
+	}
+	if !sameContent(cfg.Source, cfg.Targets[0].Path) {
+		t.Fatalf("cursor rule not refreshed from source; report=%+v", report)
+	}
+	for _, result := range report.Results {
+		if result.Path == cfg.Targets[0].Path && result.Status != "replaced" {
+			t.Fatalf("expected replaced stale cursor-rule, got %+v", result)
+		}
+	}
+}
+
+func TestStaleManagedCopyDoesNotPolluteSource(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	cfg := Config{
+		Source:  filepath.Join(dir, "source", "AGENTS.md"),
+		Targets: []Target{{Path: filepath.Join(dir, "copy", "AGENTS.md"), Mode: "link"}},
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.Source, []byte("v1 managed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeManagedCopy(cfg.Source, cfg.Targets[0].Path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.Source, []byte("v2 source only\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	source, err := os.ReadFile(cfg.Source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(source)
+	if strings.Contains(got, "agentsync:begin import") || strings.Contains(got, "v1 managed") {
+		t.Fatalf("stale managed copy polluted source: %q; report=%+v", got, report)
+	}
+	if got != "v2 source only\n" {
+		t.Fatalf("source changed unexpectedly: %q", got)
+	}
+}
+
+func TestCursorRuleReplacesBareSymlink(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	cursorHome := filepath.Join(dir, ".cursor")
+	cfg := Config{
+		Source: filepath.Join(dir, "source", "AGENTS.md"),
+		Targets: []Target{
+			{Path: filepath.Join(cursorHome, "rules", "AGENTS.mdc"), Mode: "cursor", Detect: cursorHome},
+		},
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.Source, []byte("source body\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cfg.Targets[0].Path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(cfg.Source, cfg.Targets[0].Path); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	info, err := os.Lstat(cfg.Targets[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("cursor rule should not remain a symlink; report=%+v", report)
+	}
+	data, err := os.ReadFile(cfg.Targets[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "alwaysApply: true") {
+		t.Fatalf("replaced cursor rule missing frontmatter: %q", data)
+	}
+}
+
 func TestDefaultGlobalConfigGatesEveryTarget(t *testing.T) {
 	cfg, err := defaultGlobalConfig()
 	if err != nil {

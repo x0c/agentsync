@@ -36,6 +36,7 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.iflow/IFLOW.md", Mode: "link", Detect: "~/.iflow"},
 		{Path: "~/.config/kilo/AGENTS.md", Mode: "link", Detect: "~/.config/kilo"},
 		// IDE / 编辑器系 Agent
+		{Path: "~/.cursor/rules/AGENTS.mdc", Mode: "cursor", Detect: "~/.cursor"},
 		{Path: "~/.codeium/windsurf/memories/global_rules.md", Mode: "link", Detect: "~/.codeium/windsurf"},
 		{Path: "~/.config/zed/AGENTS.md", Mode: "link", Detect: "~/.config/zed"},
 		// 大厂自研 Agent

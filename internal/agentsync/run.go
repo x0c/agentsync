@@ -152,6 +152,28 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		return result, "", err
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
+		// cursor 模式必须是带 frontmatter 的受管文件，裸 symlink 到统一源不算就绪。
+		if target.Mode == "cursor" {
+			if opts.Check {
+				result.Status = "wrong-link"
+				result.Detail = "would replace symlink with cursor-rule"
+				return result, "", nil
+			}
+			backup, err := backupFile(target.Path)
+			if err != nil {
+				return result, "", err
+			}
+			if err := removePath(target.Path); err != nil {
+				return result, "", err
+			}
+			kind, err := createAlias(source, target.Path, target.Mode)
+			if err != nil {
+				return result, "", err
+			}
+			result.Status = "replaced"
+			result.Detail = kind
+			return result, backup, nil
+		}
 		if symlinkPointsTo(target.Path, source) {
 			result.Status = "ok"
 			result.Detail = "symlink"
@@ -234,13 +256,48 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		result.Detail = "not a regular file"
 		return result, "", nil
 	}
-	if sameContent(source, target.Path) || opts.Force {
-		if opts.Check {
-			result.Status = "replaceable"
-			if opts.Force {
-				result.Detail = "would replace because --force was set"
+	if sameContent(source, target.Path) {
+		if !opts.Force {
+			result.Status = "ok"
+			if target.Mode == "cursor" {
+				result.Detail = "cursor-rule"
 			} else {
 				result.Detail = "content matches source"
+			}
+			return result, "", nil
+		}
+		if opts.Check {
+			result.Status = "replaceable"
+			result.Detail = "would replace because --force was set"
+			return result, "", nil
+		}
+		backup, err := backupFile(target.Path)
+		if err != nil {
+			return result, "", err
+		}
+		if err := removePath(target.Path); err != nil {
+			return result, "", err
+		}
+		kind, err := createAlias(source, target.Path, target.Mode)
+		if err != nil {
+			return result, "", err
+		}
+		result.Status = "replaced"
+		result.Detail = kind
+		return result, backup, nil
+	}
+	// 受管副本（Cursor .mdc / writeManagedCopy）与 --force：统一源为准，直接替换，不回写。
+	// 否则「改统一源 → 再跑 agentsync」会把过期受管正文当独特内容 append 进统一源，造成整篇重复。
+	if opts.Force || target.Mode == "cursor" || isManagedAgentsyncFile(target.Path) {
+		if opts.Check {
+			result.Status = "replaceable"
+			switch {
+			case opts.Force:
+				result.Detail = "would replace because --force was set"
+			case target.Mode == "cursor":
+				result.Detail = "would replace stale cursor-rule from source"
+			default:
+				result.Detail = "would replace stale managed copy from source"
 			}
 			return result, "", nil
 		}

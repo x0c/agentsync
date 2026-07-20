@@ -45,12 +45,12 @@ flowchart TD
 | 规范统一源 | `~/.config/agentsync/AGENTS.md` | 所有工具共享的指令文件 |
 | Skill 统一源 | `~/.config/agentsync/skills` | 每个子目录是一个完整 skill |
 
-规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
+规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
 
 ```text
 规范入口：  ~/.codex/AGENTS.md、~/.claude/CLAUDE.md、~/.gemini/GEMINI.md、
-            ~/.qwen/QWEN.md、~/.joycode/AGENTS.md …（指向规范统一源）
-Skill 入口：~/.codex/skills、~/.config/opencode/skills、~/.joycode/skills …
+            ~/.cursor/rules/AGENTS.mdc（cursor 模式受管副本）、~/.joycode/AGENTS.md …
+Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
             （整体指向 Skill 统一源）
 ```
 
@@ -97,7 +97,9 @@ CLAUDE.md -> AGENTS.md
 
 ## 合并草稿与采纳
 
-当现有入口文件和统一源存在冲突时，agentsync 会尽量将独特内容追加到统一源。对于需要人工整理的场景，`createMergeDraft()` 会在合并草稿目录生成 Markdown，报告中出现 `Merge draft` 和下一步命令：
+当现有入口文件和统一源存在冲突时，agentsync 会尽量将独特内容追加到统一源。**例外**：带 `<!-- managed-by: agentsync` 的受管副本（含 Cursor `AGENTS.mdc`）是统一源衍生品，过期时直接以统一源覆盖，不会回写；否则改统一源后再同步会把旧副本整篇拼回源文件。
+
+对于需要人工整理的场景，`createMergeDraft()` 会在合并草稿目录生成 Markdown，报告中出现 `Merge draft` 和下一步命令：
 
 ```bash
 agentsync --adopt <draft-path>
@@ -112,6 +114,27 @@ agentsync --adopt <draft-path>
 5. 继续执行一次同步，让目标入口重新收敛。
 
 `--adopt --check` 只检查草稿路径是否可用，不替换统一源。
+
+## Cursor 规则已同步但 Agent 看不到
+
+`agentsync` / `agentsync --check` 对 Cursor 报告 `linked` / `ok`（目标 `~/.cursor/rules/AGENTS.mdc`）只说明**磁盘侧**已收敛。Settings → Rules 能列出该文件，也不等于当前 Agent 会话已把正文注入系统提示。
+
+常见根因（Cursor 产品侧，非 agentsync 写错）：
+
+1. **Agents Window / Agent 以 `$HOME` 为 workspace**——未打开具体项目文件夹时，`~/.cursor/rules/*.mdc` 经常不加载（论坛员工说明：打开项目 workspace 后才会同时吃到用户级 file-backed 规则与项目规则）。
+2. **Settings 可见、运行时不注入**——file-backed 全局 `.mdc` 与 UI「User Rules」纯文本是两条链路；后者更稳。
+3. **`alwaysApply: true` 偶发被当成可请求规则**——社区有报告（称客户端 3.2 修复）；表现是规则在「可 @」列表里，但不自动进提示词。
+4. **Skills 仍可能正常**——`~/.cursor/skills` 与 rules 发现路径不同，可出现「skills 有、全局规则没有」。
+
+自检：新开 Agent，直接问能否复述统一源里某段特有标题（如「收工前反思」）；能复述才算注入成功。勿只看 Settings 列表。
+
+workaround（按稳妥程度）：
+
+1. 用具体项目目录打开 workspace 再开 Agent（不要用 home）。
+2. 把关键段落贴进 Settings → Rules → User Rules（纯文本，跨表面最稳）。
+3. 聊天里 `@` 引用 `~/.cursor/rules/AGENTS.mdc`。
+
+路径与置信度细节见 [agent_runtime_global_paths.md](agent_runtime_global_paths.md) Cursor 行与「主要冲突与存疑点」表。
 
 ## 本地开发验证
 

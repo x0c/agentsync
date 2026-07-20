@@ -24,7 +24,7 @@ agentsync 的同步机制围绕“统一源”和“工具入口”展开。统�
 
 - 规范统一源：`~/.config/agentsync/AGENTS.md`。
 - Skill 统一源：`~/.config/agentsync/skills`。
-- 规范目标入口：Codex、OpenCode、Claude Code、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等工具的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。完整清单见 `defaultGlobalConfig()`。
+- 规范目标入口：Codex、OpenCode、Claude Code、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等工具的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。完整清单见 `defaultGlobalConfig()`。Cursor 为 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`）。
 - Skill 目标入口：各工具的用户 skill 根目录。
 - 安装门控（Detect）：每个规范/Skill 入口都带一个 `Detect` 标志目录，取该工具的用户级主目录（如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，`syncTarget()` / `syncSkillRoot()` 直接返回 `skipped`，不创建任何目录或文件。这样一台机器上只会为真正装了的工具建立入口。
 - 仓库级源：当前 Git 仓库的 `AGENTS.md`。
@@ -168,9 +168,12 @@ CLAUDE.md -> AGENTS.md
 - **AI 易错点**【隐藏 Skill 目录】以点开头的隐藏 Skill 目录不参与普通 skill 发现，但要通过 `preserveHiddenSkillEntries()` 复制到统一源。忽略它会丢掉 Codex `.system` 这类工具内部 skill。
 - **AI 易错点**【统一源内 symlink 物化】统一 Skill 源中普通 skill 如果是 symlink，需通过 `materializeCanonicalSkillLinks()` 变成真实目录，否则工具侧根目录统一后仍可能指向外部不稳定路径。
 - 【仓库模式边界】`--repo` 和 `--all` 只处理仓库内 `CLAUDE.md -> AGENTS.md`；不要让它们改用户级 `~/.config/agentsync/AGENTS.md` 或 Skill 根目录。
-- 【别名降级】`createAlias()` 的顺序是 symlink、Windows hardlink、受管副本。新增平台适配时不要跳过受管副本，否则低权限环境会失败。
+- 【别名降级】`createAlias()` 的顺序是 symlink、Windows hardlink、受管副本。新增平台适配时不要跳过受管副本，否则低权限环境会失败。`Mode: cursor` 例外：必须写带 `alwaysApply` frontmatter 的受管 `.mdc`，禁止裸 symlink 到统一源（Cursor 不认无 frontmatter 的规则文件）。
+- **AI 易错点**【Cursor：落盘成功 ≠ Agent 已注入】`agentsync` 写好 `~/.cursor/rules/AGENTS.mdc`（且 Settings 能列出）只证明文件侧收敛成功。Cursor Agents Window / 以 `$HOME` 为 workspace 开 Agent 时，文件型全局规则常出现「UI 可见、系统提示未注入」；Skills（`~/.cursor/skills`）走另一套发现路径，可单独生效。这是 Cursor 产品侧已知问题，不是 agentsync 漏写。排查与 workaround 见 [AGENTSYNC_GUIDE.md](AGENTSYNC_GUIDE.md)「Cursor 规则已同步但 Agent 看不到」与 [agent_runtime_global_paths.md](agent_runtime_global_paths.md) Cursor 行。
+- 【内容一致即 ok】目标已是普通文件且 `sameContent`（会剥 managed marker / cursor frontmatter）为真时，除非 `--force`，应报告 `ok`，不要每次都 replace。
 - 【相对链接】仓库模式使用 `relative-link`；全局模式使用绝对路径。把仓库模式改成绝对链接会降低仓库移动后的可用性。
 - 【冲突处理】普通文件内容不同时，默认合并独特内容；`--force` 才允许在备份后直接替换。不要把 `--force` 行为变成默认行为。
+- **AI 易错点**【受管副本禁止回写统一源】带 `<!-- managed-by: agentsync` 的目标（含 Cursor `.mdc` 与 `writeManagedCopy` 退路）是统一源的衍生品，不是独立作者内容。正文与统一源不一致时必须**直接以统一源替换**，禁止走 `appendImportedContent`。否则「改统一源 → 再跑 agentsync」会把过期受管正文当独特内容整篇拼回统一源，造成重复。真人手写、无 managed marker 的普通文件仍走合并路径。
 - 【报告语义】`TargetResult.Status` 是用户判断下一步的接口。新增状态时要同步 README、Guide 和测试，避免用户看到无法解释的输出。
 - 【测试隔离】单测必须设置隔离配置根，不能依赖真实用户 home 下的 agentsync 状态。
 - 【低置信度】真实用户最常见的冲突场景、手工整理草稿的团队习惯、发布前人工验收口径缺少用户经验输入；后续需要从实际使用反馈补充。
@@ -233,7 +236,8 @@ goreleaser check
 
 ## §8 关联文档
 
-- [AGENTSYNC_GUIDE.md](AGENTSYNC_GUIDE.md)：命令使用、验证和发布入口。
+- [AGENTSYNC_GUIDE.md](AGENTSYNC_GUIDE.md)：命令使用、验证、发布入口；Cursor「已同步但 Agent 看不到」排查。
+- [agent_runtime_global_paths.md](agent_runtime_global_paths.md)：各 runtime 全局路径调研；Cursor `~/.cursor/rules` 注入存疑点。
 - [../README.md](../README.md)：公开英文用法。
 - [../README.zh-CN.md](../README.zh-CN.md)：公开中文用法。
 - [../AGENTS.md](../AGENTS.md)：项目文档导航、领域地图和 backlog。

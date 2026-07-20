@@ -1,6 +1,6 @@
 # agentsync 项目规范
 
-agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
+agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
 
 本仓是工具型项目，不按传统业务域拆文档；文档入口按用户工作流和命令能力组织。
 
@@ -8,8 +8,8 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 
 - 全局规范源：`~/.config/agentsync/AGENTS.md`
 - 全局 Skill 源：`~/.config/agentsync/skills/`
-- 全局工具入口：覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 各自的用户级规范文件，外加通用 `~/.agents/AGENTS.md`。完整清单与各自路径见 `internal/agentsync/paths.go` 的 `defaultGlobalConfig()`。
-- 全局 Skill 入口：上述工具各自的用户级 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.joycode/skills` 等），外加通用 `~/.agents/skills`。
+- 全局工具入口：覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 各自的用户级规范文件，外加通用 `~/.agents/AGENTS.md`。完整清单与各自路径见 `internal/agentsync/paths.go` 的 `defaultGlobalConfig()`。Cursor 使用 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`，带 `alwaysApply` frontmatter 的受管副本，不是裸 symlink）。
+- 全局 Skill 入口：上述工具各自的用户级 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.cursor/skills`、`~/.joycode/skills` 等），外加通用 `~/.agents/skills`。
 - **按安装门控**：每个入口都带一个 `Detect` 标志目录（该工具的用户级主目录，如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，同步时报告 `skipped`，绝不为未安装的工具创建任何目录或入口文件。新增 runtime 时必须同时给出正确的 `Detect`。
 - 项目级入口：仓库内 `AGENTS.md` 与 `CLAUDE.md`
 
@@ -42,11 +42,11 @@ goreleaser check
 
 > 以下文档在涉及对应领域的开发、评审或排查时先读取。
 
-- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：命令使用、检查模式、全局收敛、仓库收敛、批量收敛、草稿采纳、本地验证、发布入口
-- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：规范文件收敛、Skill 根目录收敛、路径与别名策略、备份与合并、安全边界、AI 易错点
-- [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某个 agent runtime 的规范入口或 skill 目录、核对某工具的全局规则文件与 skill 目录官方路径时查阅（市面主流 runtime 全局路径调研，含置信度标注）
-- [README.md](README.md)：面向公开用户的英文安装与用法说明
-- [README.zh-CN.md](README.zh-CN.md)：面向公开用户的中文安装与用法说明
+- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：命令使用、检查模式、全局收敛、仓库收敛、批量收敛、草稿采纳；排查 Cursor「规则已同步 / Settings 有但 Agent 看不到」；本地验证、发布入口
+- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：规范文件收敛、Skill 根目录收敛、路径与别名策略、备份与合并、安全边界、AI 易错点（含 Cursor 落盘≠注入）
+- [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某个 agent runtime 的规范入口或 skill 目录、核对某工具的全局规则文件与 skill 目录官方路径、查 Cursor `~/.cursor/rules` 注入存疑点时查阅（市面主流 runtime 全局路径调研，含置信度标注）
+- [README.md](README.md)：面向公开用户的英文安装与用法说明（含 Cursor 注入 caveat）
+- [README.zh-CN.md](README.zh-CN.md)：面向公开用户的中文安装与用法说明（含 Cursor 注入 caveat）
 
 ## 领域地图（doc-init）
 

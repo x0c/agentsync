@@ -18,17 +18,42 @@ func ensureParent(path string) error {
 	return os.MkdirAll(filepath.Dir(path), 0o755)
 }
 
+const cursorFrontmatter = `---
+description: agentsync global instructions
+alwaysApply: true
+---
+`
+
 func readPayload(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	if strings.HasPrefix(string(data), managedMarkerPrefix) {
-		if idx := strings.Index(string(data), "-->\n"); idx >= 0 {
-			return data[idx+4:], nil
+	s := string(data)
+	// Cursor 受管规则：YAML frontmatter 后紧跟 managed marker 时，剥掉 frontmatter 再比正文。
+	if strings.HasPrefix(s, "---\n") {
+		if body, ok := stripYAMLFrontmatter(s); ok && strings.HasPrefix(body, managedMarkerPrefix) {
+			s = body
 		}
 	}
-	return data, nil
+	if strings.HasPrefix(s, managedMarkerPrefix) {
+		if idx := strings.Index(s, "-->\n"); idx >= 0 {
+			return []byte(s[idx+4:]), nil
+		}
+	}
+	return []byte(s), nil
+}
+
+func stripYAMLFrontmatter(s string) (string, bool) {
+	if !strings.HasPrefix(s, "---\n") {
+		return "", false
+	}
+	rest := s[4:]
+	idx := strings.Index(rest, "\n---\n")
+	if idx < 0 {
+		return "", false
+	}
+	return rest[idx+5:], true
 }
 
 func sameContent(a, b string) bool {
@@ -41,6 +66,23 @@ func sameContent(a, b string) bool {
 		return false
 	}
 	return string(aa) == string(bb)
+}
+
+// isManagedAgentsyncFile 判断目标是否为 agentsync 自己写出的受管副本
+//（含 Cursor .mdc：frontmatter + managed marker）。这类文件是统一源的衍生品，
+// 过期时应以统一源为准直接替换，禁止再把旧正文 append 回统一源。
+func isManagedAgentsyncFile(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	s := string(data)
+	if strings.HasPrefix(s, "---\n") {
+		if body, ok := stripYAMLFrontmatter(s); ok {
+			s = body
+		}
+	}
+	return strings.HasPrefix(s, managedMarkerPrefix)
 }
 
 func writeManagedCopy(source, target string) error {
@@ -57,9 +99,32 @@ func writeManagedCopy(source, target string) error {
 	return os.WriteFile(target, []byte(body), 0o644)
 }
 
+func writeCursorRule(source, target string) error {
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(data)
+	var b strings.Builder
+	b.WriteString(cursorFrontmatter)
+	b.WriteString(fmt.Sprintf("<!-- managed-by: agentsync source=%q sha256=%s -->\n", source, hex.EncodeToString(sum[:])))
+	b.Write(data)
+	if err := ensureParent(target); err != nil {
+		return err
+	}
+	return os.WriteFile(target, []byte(b.String()), 0o644)
+}
+
 func createAlias(source, target, mode string) (string, error) {
 	if err := ensureParent(target); err != nil {
 		return "", err
+	}
+	// Cursor 全局规则需要 alwaysApply frontmatter，不能直接 symlink 裸 AGENTS.md。
+	if mode == "cursor" {
+		if err := writeCursorRule(source, target); err != nil {
+			return "", err
+		}
+		return "cursor-rule", nil
 	}
 	linkTarget := source
 	if mode == "relative-link" {

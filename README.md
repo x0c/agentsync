@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 `agentsync` is a small Go CLI that keeps AI coding-agent instructions and reusable skills in one canonical place.
 
-It prevents drift across many AI coding agents — Codex, Claude Code, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and more — by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
+It prevents drift across many AI coding agents — Codex, Claude Code, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Cursor, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and more — by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
 
 ## Only Touches Installed Runtimes
 
@@ -35,6 +35,7 @@ Tool-specific instruction aliases (created only when the runtime is installed):
 ~/.factory/AGENTS.md
 ~/.iflow/IFLOW.md
 ~/.config/kilo/AGENTS.md
+~/.cursor/rules/AGENTS.mdc
 ~/.codeium/windsurf/memories/global_rules.md
 ~/.config/zed/AGENTS.md
 ~/.codebuddy/CODEBUDDY.md
@@ -44,6 +45,8 @@ Tool-specific instruction aliases (created only when the runtime is installed):
 ~/.joycode/AGENTS.md
 ~/.agents/AGENTS.md
 ```
+
+Cursor's entry is a managed `.mdc` rule (`alwaysApply: true` frontmatter + source body), not a bare symlink — Cursor ignores plain rule files without frontmatter. If Settings lists the rule but the Agent cannot quote its body, Cursor often skips file-backed `~/.cursor/rules` when the workspace is `$HOME` / Agents Window has no project open; open a real project workspace, or paste critical text into Settings → User Rules (see `docs/AGENTSYNC_GUIDE.md`).
 
 Canonical skill directory:
 
