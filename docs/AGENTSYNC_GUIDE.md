@@ -85,11 +85,15 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
 
 ## 后台监听
 
-MCP 配置不能整文件 symlink，Cursor 的 `AGENTS.mdc` 也是受管副本。`--watch` 用标准库轮询（默认 2 秒）统一源 `AGENTS.md` / `mcp.json` / `skills/`，以及各 runtime `Detect` 目录是否出现；变化经过短防抖后调用一次普通全局同步。它**不**监视 `~/.claude.json` 等热文件，避免写回环。用户应只改统一源。
+MCP 配置不能整文件 symlink，Cursor 的 `AGENTS.mdc` 也是受管副本。`--watch` 用标准库轮询（默认 2 秒）统一源 `AGENTS.md` / `mcp.json` / `skills/`，以及各 runtime `Detect` 目录是否出现。指纹按这四块分开：只改规范或 Skill 时**不同步 MCP**，避免把工具 UI 里新加的服务器冲掉。`mcp.json` 变化或新装 runtime（Detect 出现）才会写 MCP。变化必须连续稳定一段时间才同步（trailing debounce，默认 1.5 秒）；新 Detect 目录再多等约 5 秒，给安装器写完首次配置。Skill 指纹忽略 Syncthing 冲突文件和 `.DS_Store`，但会跟踪 `.system` 隐藏 skill。它**不**监视 `~/.claude.json` 等热文件，避免写回环，也不从工具侧把 MCP 拉回统一源。用户应只改统一源。
 
-不能与 `--check`、`--repo`、`--all`、`--adopt` 同时使用。失败会打到 stderr 并继续监听，方便当 systemd/launchd 服务。
+空文件、`{}`、缺 `mcpServers` 的 `mcp.json` 会报错并跳过，不会清空已安装工具。watch 下即便写成 `"mcpServers": {}`，只要工具侧还有服务器也会拒绝覆盖；要清空请手动跑一次 `agentsync`。同步失败不会把这次坏指纹记成已处理，下次仍会重试。
 
-Linux 用户单元模板：`contrib/systemd/agentsync.service`（`ExecStart` 默认 `%h/.local/bin/agentsync --watch`）。macOS 模板：`contrib/launchd/top.x0c.agentsync.plist`，需改成实际二进制路径。
+不能与 `--check`、`--repo`、`--all`、`--adopt`、`--force` 同时使用。失败会打到 stderr 并继续监听，方便当 systemd/launchd 服务。
+
+CLI 默认仍是一次性 `agentsync`。`--watch` 是可选常驻，不要改成隐式默认，也不要加 `agentsync service install`：只提供模板，由用户自己 enable。
+
+Linux 用户单元模板：`contrib/systemd/agentsync.service`（`ExecStart` 默认 `%h/.local/bin/agentsync --watch`）。macOS 模板：`contrib/launchd/top.x0c.agentsync.plist`，需改成实际二进制路径。改 watch 代码后：`GOBIN=~/.local/bin go install .`，若本机已 enable 该单元则再 `systemctl --user restart agentsync.service`。
 
 ## 仓库模式
 
@@ -164,9 +168,11 @@ go build ./...
 修改 CLI 行为后执行：
 
 ```bash
-go install .
+GOBIN=~/.local/bin go install .
 agentsync --check
 ```
+
+本机若已 enable `agentsync.service`，install 后再 `systemctl --user restart agentsync.service`。回复里写出 `go test ./...` 的实际结果，不要只说测过了。
 
 改发布配置后执行：
 
@@ -180,7 +186,7 @@ goreleaser check
 python3 /home/vibecoder/.config/agentsync/skills/doc-init/scripts/doc_nav_lint.py --root .
 ```
 
-本仓没有常驻服务、HTTP 端口或本地数据库依赖，不生成 `OPERATIONS_GUIDE.md`。运行验证主要是 CLI 冒烟和测试。
+没有 HTTP 端口或本地数据库。可选的 `--watch` 用用户级 systemd/launchd 常驻，模板在 `contrib/`，不单独写 `OPERATIONS_GUIDE.md`。运行验证主要是 CLI 冒烟、测试，以及（若已 enable）确认 watch 服务用的是刚装的二进制。
 
 ## 发布入口
 

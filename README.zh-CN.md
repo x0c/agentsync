@@ -77,7 +77,7 @@ Cursor 入口是带 `alwaysApply: true` frontmatter 的受管 `.mdc`（不是裸
 ~/.config/agentsync/mcp.json
 ```
 
-全局模式（不是 `--repo` / `--all`）会把该文件按各已安装工具的 schema 写进用户级 MCP 入口。`~/.claude.json`、`~/.codex/config.toml` 这类混杂热文件只改 MCP 那个 key；`~/.cursor/mcp.json` 这类独立 MCP 文件整段覆盖。不同步 iFlow，也不为 `~/.agents` 造 MCP 入口。请只改统一源——agentsync 会在 `~/.config/agentsync/AGENTS.md` 里注入提醒。若配置目录本身是 git 仓库，会把 `mcp.json` 写入 `.gitignore`（里面常有 token）。
+全局模式（不是 `--repo` / `--all`）会把该文件按各已安装工具的 schema 写进用户级 MCP 入口。`~/.claude.json`、`~/.codex/config.toml` 这类混杂热文件只改 MCP 那个 key；`~/.cursor/mcp.json` 这类独立 MCP 文件整段覆盖。不同步 iFlow，也不为 `~/.agents` 造 MCP 入口。Codex 捆绑的本机服务器（`node_repl`、`computer-use`）只留在 Codex。请只改统一源——agentsync 会在 `~/.config/agentsync/AGENTS.md` 里注入提醒。`mcp.json` 是本机文件（常有 token 和本机路径），配置目录若是 git 仓库或 Syncthing 文件夹，会写入 `.gitignore` / `.stignore`。不要默认同步到其他机器。
 
 ## 安装
 
@@ -121,7 +121,7 @@ agentsync
 agentsync --watch
 ```
 
-它会轮询统一源 `AGENTS.md`、`mcp.json`、`skills/`，以及各工具主目录是否出现。改统一源或新装了一个 agent，就会自动把副本写回去。MCP 配置不能软链接，所以靠这个保持同步。`--watch` 不能和 `--check`、`--repo`、`--all`、`--adopt` 一起用。
+它会轮询统一源 `AGENTS.md`、`mcp.json`、`skills/`，以及各工具主目录是否出现。改统一源或新装了一个 agent，就会自动把副本写回去。只改规范或 Skill 时不会重写 MCP。MCP 配置不能软链接，所以靠这个保持同步。`--watch` 不能和 `--check`、`--repo`、`--all`、`--adopt`、`--force` 一起用。
 
 Linux 可用 `contrib/systemd/agentsync.service`：
 
@@ -159,7 +159,7 @@ agentsync --all ~/Codes
 - `--check` 只读。
 - 已有独特指令内容会先并入统一源文件，再创建软链接。
 - 已有 Skill 目录会先复制到统一 Skill 目录，再将工具侧 Skill 根目录替换成软链接。
-- MCP 服务器会先导入 `~/.config/agentsync/mcp.json`（同名时已安装工具按清单顺序先到先得），再按各工具 schema 覆盖已安装入口。`--repo` 与 `--all` 不同步 MCP。
+- MCP 服务器会先导入 `~/.config/agentsync/mcp.json`（同名时已安装工具按清单顺序先到先得，大小写不敏感），再按各工具 schema 覆盖已安装入口。Codex 捆绑的本机服务器不扩散到其他工具。`--repo` 与 `--all` 不同步 MCP。
 - 替换前的文件和目录会备份到 `~/.config/agentsync/backups/`。
 - Codex `.system` 这类隐藏内部 Skill 目录会先保留到统一 Skill 根目录，再替换工具侧 Skill 根目录。
 - macOS 和 Linux 优先使用软链接。

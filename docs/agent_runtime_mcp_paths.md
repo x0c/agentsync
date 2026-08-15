@@ -34,9 +34,11 @@ agentsync 要解决的是各工具 MCP 配置漂移：同一套服务器在不�
 
 - **不能整文件 symlink 混杂配置**（Codex `config.toml`、Claude `~/.claude.json`、OpenCode `opencode.json`、Zed `settings.json` 等）。独立 MCP 文件可以整段替换 `mcpServers`。
 - **允许引入解析库**（TOML / YAML / JSONC）。这是对本仓「仅标准库」约束的例外，实现时同步改根 `AGENTS.md` 技术栈说明。
-- **允许明文密钥**，不要改目标文件权限。统一源常含 token / `private_` URL：**不得提交进本仓或用户配置仓**；用户 `~/.config/agentsync/` 若是 git / Syncthing 目录，实现时必须把 `mcp.json` 写入 ignore。
+- **允许明文密钥**，新建统一源用 `0600`，不要改已有目标文件权限。统一源常含 token / `private_` URL：**不得提交进本仓或用户配置仓，也不要默认同步到其他机器**；用户 `~/.config/agentsync/` 若是 git / Syncthing 目录，必须把 `mcp.json`、`backups/`、`merge-drafts/` 写入 `.gitignore` / `.stignore`。
 - **超时字段跨 runtime 默认丢弃**，不做隐式毫秒/秒换算。
 - **不代做本机批准名单**（Cursor `agent mcp enable`、项目级信任对话框、企业 allowlist）。
+- **并集导入大小写不敏感**：`Mobbin` 与 `mobbin` 视为同一服务器，先到先得保留先看到的名字。
+- **Codex 捆绑本机服务器不扩散**：`node_repl` / `computer-use`（`SkyComputerUseClient`、`NODE_REPL_*`）只写回 Codex；其他工具不写这些条目，避免启动失败。统一源仍保留它们，以便 Codex 往返。
 - **心流 iFlow 的 MCP 首发不做**（已于 2026-04-17 关停并引导 Qoder）。规范/Skill 入口若目录仍在，维持现有 Detect 跳过即可。
 - **`~/.agents` 无 MCP 概念**，不要为它造入口。
 

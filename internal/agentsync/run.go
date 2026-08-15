@@ -9,8 +9,8 @@ import (
 
 func Run(opts Options) error {
 	if opts.Watch {
-		if opts.Check || opts.Repo || opts.All != "" || opts.Adopt != "" {
-			return fmt.Errorf("--watch cannot be combined with --check, --repo, --all, or --adopt")
+		if opts.Check || opts.Repo || opts.All != "" || opts.Adopt != "" || opts.Force {
+			return fmt.Errorf("--watch cannot be combined with --check, --repo, --all, --adopt, or --force")
 		}
 		return runWatch(opts)
 	}
@@ -119,12 +119,14 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 	}
 	report.SkillResults = append(report.SkillResults, skillResults...)
 	report.Backups = append(report.Backups, skillBackups...)
-	mcpResults, mcpBackups, err := syncMCP(cfg, opts)
-	if err != nil {
-		return report, err
+	if !opts.SkipMCP {
+		mcpResults, mcpBackups, err := syncMCP(cfg, opts)
+		if err != nil {
+			return report, err
+		}
+		report.MCPResults = append(report.MCPResults, mcpResults...)
+		report.Backups = append(report.Backups, mcpBackups...)
 	}
-	report.MCPResults = append(report.MCPResults, mcpResults...)
-	report.Backups = append(report.Backups, mcpBackups...)
 	return report, nil
 }
 

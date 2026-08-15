@@ -175,6 +175,15 @@ func TestSyncMCPImportsUnionThenOverwrites(t *testing.T) {
 	if commandOf(cursorServers, "only-claude") != "claude-cmd" {
 		t.Fatalf("cursor was not overwritten with union: %+v", cursorServers)
 	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(cfg.MCPSource)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("new mcp.json mode = %o, want 0600", info.Mode().Perm())
+		}
+	}
 	claudeRaw, err := os.ReadFile(filepath.Join(dir, ".claude.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -193,6 +202,126 @@ func TestSyncMCPImportsUnionThenOverwrites(t *testing.T) {
 		if result.Status != "ok" && result.Status != "skipped" {
 			t.Fatalf("second run should be idempotent, got %+v", report.MCPResults)
 		}
+	}
+}
+
+func TestImportMCPUnionCollapsesCaseVariants(t *testing.T) {
+	dir := t.TempDir()
+	cursorDir := filepath.Join(dir, "cursor")
+	codexDir := filepath.Join(dir, "codex")
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codexDir, "config.toml"), []byte(`[mcp_servers.mobbin]
+url = "https://example/mcp"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cursorDir, "mcp.json"), []byte(`{
+  "mcpServers": {
+    "Mobbin": {"type": "http", "url": "https://example/mcp"}
+  }
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	imported := importMCPUnion([]MCPTarget{
+		{Name: "codex", Path: filepath.Join(codexDir, "config.toml"), Detect: codexDir, Dialect: "codex", Format: "toml", Mode: "key"},
+		{Name: "cursor", Path: filepath.Join(cursorDir, "mcp.json"), Detect: cursorDir, Dialect: "cursor", Format: "json", Mode: "file"},
+	})
+	if len(imported) != 1 {
+		t.Fatalf("case variants should collapse, got %+v", imported)
+	}
+	if imported[0].Name != "mobbin" {
+		t.Fatalf("first-wins should keep lowercase name, got %q", imported[0].Name)
+	}
+}
+
+func TestCodexBundledServersStayOnCodexOnly(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	cursorDir := filepath.Join(dir, "cursor")
+	codexDir := filepath.Join(dir, "codex")
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp.json"), []byte(`{
+  "mcpServers": {
+    "shared": {"type": "http", "url": "https://example/mcp"},
+    "node_repl": {"type": "stdio", "command": "/tmp/node_repl", "env": {"NODE_REPL_FOO": "1"}},
+    "computer-use": {"type": "stdio", "command": "/tmp/SkyComputerUseClient", "cwd": "/tmp"}
+  }
+}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{
+			{Name: "codex", Path: filepath.Join(codexDir, "config.toml"), Detect: codexDir, Dialect: "codex", Format: "toml", Mode: "key"},
+			{Name: "cursor", Path: filepath.Join(cursorDir, "mcp.json"), Detect: cursorDir, Dialect: "cursor", Format: "json", Mode: "file"},
+		},
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	cursorServers, err := parseCanonicalFile(filepath.Join(cursorDir, "mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasServer(cursorServers, "shared") {
+		t.Fatalf("cursor missing shared: %+v", cursorServers)
+	}
+	if hasServer(cursorServers, "node_repl") || hasServer(cursorServers, "computer-use") {
+		t.Fatalf("cursor should not receive Codex bundled servers: %+v", cursorServers)
+	}
+	raw, err := os.ReadFile(filepath.Join(codexDir, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	codexServers, err := extractCodexTOML(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasServer(codexServers, "node_repl") || !hasServer(codexServers, "computer-use") {
+		t.Fatalf("codex should keep bundled servers: %+v", codexServers)
+	}
+}
+
+func TestExtractCodexNestedEnvIsNotSeparateServer(t *testing.T) {
+	data := []byte(`[mcp_servers.node_repl]
+command = "node"
+args = ["repl.js"]
+
+[mcp_servers.node_repl.env]
+FOO = "bar"
+BAZ = "qux"
+`)
+	servers, err := extractCodexTOML(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 1 {
+		t.Fatalf("nested env table should not become another server, got %+v", servers)
+	}
+	if servers[0].Name != "node_repl" {
+		t.Fatalf("server name = %q", servers[0].Name)
+	}
+	if servers[0].Command != "node" {
+		t.Fatalf("command = %q", servers[0].Command)
+	}
+	if servers[0].Env["FOO"] != "bar" || servers[0].Env["BAZ"] != "qux" {
+		t.Fatalf("env not folded into parent: %+v", servers[0].Env)
 	}
 }
 
@@ -548,6 +677,251 @@ func TestSyncMCPGitignoreWhenConfigIsGitRepo(t *testing.T) {
 	if !gitignoreHasMCP(string(data)) {
 		t.Fatalf("mcp.json not ignored: %s", data)
 	}
+	if !ignoreHasEntry(string(data), "backups/") || !ignoreHasEntry(string(data), "merge-drafts/") {
+		t.Fatalf("secret dirs not ignored: %s", data)
+	}
+}
+
+func TestSyncMCPStignoreWhenConfigIsSyncthingFolder(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "config")
+	t.Setenv("AGENTSYNC_CONFIG_HOME", root)
+	if err := os.MkdirAll(filepath.Join(root, ".stfolder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	detect := filepath.Join(dir, "cursor")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(root, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "cursor",
+			Path:    filepath.Join(detect, "mcp.json"),
+			Detect:  detect,
+			Dialect: "cursor",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, ".stignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, line := range []string{"mcp.json", "backups/", "merge-drafts/"} {
+		if !ignoreHasEntry(got, line) {
+			t.Fatalf("%s not in .stignore: %s", line, got)
+		}
+	}
+}
+
+func TestParseCanonicalRejectsEmptyAndMissingKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr string
+	}{
+		{name: "empty file", input: "", wantErr: "empty file"},
+		{name: "whitespace", input: "  \n", wantErr: "empty file"},
+		{name: "missing key", input: "{}", wantErr: "missing mcpServers"},
+		{name: "null servers", input: `{"mcpServers":null}`, wantErr: "must be an object"},
+		{name: "array servers", input: `{"mcpServers":[]}`, wantErr: "must be an object"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseCanonical([]byte(tt.input))
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %v, want substring %q", err, tt.wantErr)
+			}
+		})
+	}
+	servers, err := parseCanonical([]byte(`{"mcpServers":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 0 {
+		t.Fatalf("empty object should parse as no servers, got %+v", servers)
+	}
+}
+
+func TestSyncMCPEmptyFileDoesNotWipeTargets(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	detect := filepath.Join(dir, "cursor")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(detect, "mcp.json")
+	original := `{"mcpServers":{"keep-me":{"type":"stdio","command":"keep"}}}` + "\n"
+	if err := os.WriteFile(target, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp.json"), []byte(""), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "cursor",
+			Path:    target,
+			Detect:  detect,
+			Dialect: "cursor",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if _, err := syncConfig(cfg, Options{}); err == nil {
+		t.Fatal("expected empty mcp.json to error")
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Fatalf("empty mcp.json must not wipe targets, got %s", got)
+	}
+}
+
+func TestSyncMCPWatchRefusesEmptyWhenTargetsHaveServers(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	detect := filepath.Join(dir, "cursor")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(detect, "mcp.json")
+	original := `{
+  "mcpServers": {
+    "keep-me": {"type": "stdio", "command": "keep"}
+  }
+}
+`
+	if err := os.WriteFile(target, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp.json"), []byte(`{"mcpServers":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "cursor",
+			Path:    target,
+			Detect:  detect,
+			Dialect: "cursor",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if _, err := syncConfig(cfg, Options{Watch: true}); err == nil {
+		t.Fatal("expected refuse empty mcp.json while watching")
+	} else if !strings.Contains(err.Error(), "refusing to apply empty mcp.json") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != original {
+		t.Fatalf("watch must not wipe target MCP, got %s", got)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	wiped, err := parseCanonicalFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(wiped) != 0 {
+		t.Fatalf("manual sync should apply explicit empty mcpServers, got %+v", wiped)
+	}
+}
+
+func TestSyncMCPSkipDoesNotOverwriteTargetExtras(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	detect := filepath.Join(dir, "cursor")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp.json"), []byte(`{
+  "mcpServers": {
+    "canonical": {"type": "stdio", "command": "canon"}
+  }
+}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(detect, "mcp.json")
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "cursor",
+			Path:    target,
+			Detect:  detect,
+			Dialect: "cursor",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(`{
+  "mcpServers": {
+    "canonical": {"type": "stdio", "command": "canon"},
+    "from-ui": {"type": "stdio", "command": "ui"}
+  }
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{SkipMCP: true}); err != nil {
+		t.Fatal(err)
+	}
+	kept, err := parseCanonicalFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandOf(kept, "from-ui") != "ui" {
+		t.Fatalf("SkipMCP must leave UI-added server, got %+v", kept)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	overwritten, err := parseCanonicalFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandOf(overwritten, "from-ui") != "" {
+		t.Fatalf("full sync should drop UI-added server, got %+v", overwritten)
+	}
 }
 
 func TestUpsertMCPNoticeIdempotent(t *testing.T) {
@@ -627,6 +1001,15 @@ func commandOf(servers []mcpServer, name string) string {
 		}
 	}
 	return ""
+}
+
+func hasServer(servers []mcpServer, name string) bool {
+	for _, srv := range servers {
+		if srv.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func hasMCPStatus(report RunReport, path, status string) bool {

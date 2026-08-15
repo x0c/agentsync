@@ -77,7 +77,7 @@ Canonical MCP config:
 ~/.config/agentsync/mcp.json
 ```
 
-On global `agentsync` (not `--repo` / `--all`), that file is translated into each installed runtime's user-level MCP config. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow is skipped. `~/.agents` has no MCP entry. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. If the config directory is a git repo, `mcp.json` is added to `.gitignore` (it often contains tokens).
+On global `agentsync` (not `--repo` / `--all`), that file is translated into each installed runtime's user-level MCP config. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow is skipped. `~/.agents` has no MCP entry. Codex bundled local servers (`node_repl`, `computer-use`) stay on Codex only. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. `mcp.json` is machine-local (tokens, host paths) and is added to `.gitignore` / `.stignore` when the config directory is a git repo or Syncthing folder. Do not sync it across machines.
 
 ## Install
 
@@ -121,7 +121,7 @@ Keep it applied without running the command by hand:
 agentsync --watch
 ```
 
-This polls the canonical `AGENTS.md`, `mcp.json`, `skills/`, and whether each runtime's home directory exists. Edit the canonical files (or install a new agent) and the copies are rewritten for you. MCP configs cannot be symlinks, so this is how those stay in sync. `--watch` cannot be combined with `--check`, `--repo`, `--all`, or `--adopt`.
+This polls the canonical `AGENTS.md`, `mcp.json`, `skills/`, and whether each runtime's home directory exists. Edit the canonical files (or install a new agent) and the copies are rewritten for you. Changing only `AGENTS.md` or `skills/` does not rewrite MCP configs. MCP configs cannot be symlinks, so this is how those stay in sync. `--watch` cannot be combined with `--check`, `--repo`, `--all`, `--adopt`, or `--force`.
 
 A systemd user unit lives in `contrib/systemd/agentsync.service`. On Linux:
 
@@ -159,7 +159,7 @@ agentsync --all ~/Codes
 - `--check` is read-only.
 - Existing unique instruction content is appended to the canonical source before aliases are created.
 - Existing skill directories are copied into the canonical skill directory before tool-specific skill roots are replaced with aliases.
-- MCP servers are imported once into `~/.config/agentsync/mcp.json` (first installed runtime wins on name clashes), then overwritten onto installed tools using each tool's schema. `--repo` and `--all` do not sync MCP.
+- MCP servers are imported once into `~/.config/agentsync/mcp.json` (first installed runtime wins on case-insensitive name clashes), then overwritten onto installed tools using each tool's schema. Codex bundled local servers are not copied to other tools. `--repo` and `--all` do not sync MCP.
 - Replaced files and directories are backed up under `~/.config/agentsync/backups/`.
 - Hidden skill directories such as Codex `.system` internals are preserved in the canonical skill root before tool-specific skill roots are replaced.
 - macOS and Linux use symlinks first.

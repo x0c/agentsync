@@ -8,7 +8,7 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 
 - 全局规范源：`~/.config/agentsync/AGENTS.md`
 - 全局 Skill 源：`~/.config/agentsync/skills/`
-- 全局 MCP 源：`~/.config/agentsync/mcp.json`（按已安装 runtime 翻译后写入各自用户级 MCP 入口；不整文件 symlink 混杂热文件）
+- 全局 MCP 源：`~/.config/agentsync/mcp.json`（本机文件，常含 token，不进 git / Syncthing；按已安装 runtime 翻译后写入各自用户级 MCP 入口；不整文件 symlink 混杂热文件）
 - 全局工具入口：覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 各自的用户级规范文件，外加通用 `~/.agents/AGENTS.md`。完整清单与各自路径见 `internal/agentsync/paths.go` 的 `defaultGlobalConfig()`。Cursor 使用 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`，带 `alwaysApply` frontmatter 的受管副本，不是裸 symlink）。
 - 全局 Skill 入口：上述工具各自的用户级 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.cursor/skills`、`~/.joycode/skills` 等），外加通用 `~/.agents/skills`。
 - **按安装门控**：每个入口都带一个 `Detect` 标志目录（该工具的用户级主目录，如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，同步时报告 `skipped`，绝不为未安装的工具创建任何目录或入口文件。新增 runtime 时必须同时给出正确的 `Detect`。MCP 入口同样按 Detect 门控；iFlow 的 MCP 不同步，`~/.agents` 无 MCP 入口。
@@ -36,6 +36,8 @@ goreleaser check
 ```
 
 - **覆盖本机二进制必须带 `GOBIN=~/.local/bin`**:本机 `agentsync` 实际在 `~/.local/bin/agentsync`(在 PATH 内);裸 `go install .` 会装到 `$GOPATH/bin`(`~/go/bin`,不在 PATH),导致改完代码后 `agentsync --check` 仍跑旧版、看不到新行为。排查“改了没生效”前先确认跑的是哪个二进制。
+- 本机若已 `enable --now agentsync.service`，`go install` 之后必须 `systemctl --user restart agentsync.service`，否则 `--watch` 守护进程仍是旧 binary。
+- 声称验证通过时，回复里写出实际跑过的命令和结果（至少 `go test ./...` 通过）；禁止只口头说「测过了」。
 - `agentsync --check` 是只读检查;涉及真实用户目录的验证前,先确认不会覆盖未备份内容。
 - 功能新增 / 缺陷修复验证通过后,按全局规范默认走完整发布流程:提交 → 打 `v*` tag → 推送 → tag 触发 GitHub Actions(GoReleaser)构建产物并自动更新 `x0c/homebrew-tap` 的 cask。用 `gh run list` / `gh release list` 确认远端 Release 成功、cask 版本已跟随。
 
@@ -43,8 +45,8 @@ goreleaser check
 
 > 以下文档在涉及对应领域的开发、评审或排查时先读取。
 
-- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：命令使用、检查模式、全局收敛、仓库收敛、批量收敛、草稿采纳；排查 Cursor「规则已同步 / Settings 有但 Agent 看不到」；本地验证、发布入口
-- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：规范文件收敛、Skill 根目录收敛、路径与别名策略、备份与合并、安全边界、AI 易错点（含 Cursor 落盘≠注入）
+- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：命令使用、检查模式、全局收敛、仓库收敛、批量收敛、草稿采纳、`--watch` / systemd；排查 Cursor「规则已同步 / Settings 有但 Agent 看不到」、MCP 被清空、watch 不生效；本地验证、发布入口
+- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：规范文件收敛、Skill 根目录收敛、MCP 空文件/SkipMCP、路径与别名策略、备份与合并、`.gitignore`/`.stignore`、安全边界、AI 易错点（含 Cursor 落盘≠注入）
 - [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某个 agent runtime 的规范入口或 skill 目录、核对某工具的全局规则文件与 skill 目录官方路径、查 Cursor `~/.cursor/rules` 注入存疑点时查阅（市面主流 runtime 全局路径调研，含置信度标注）
 - [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)：实现或调整 MCP 配置同步、核对某工具用户级 MCP 落点与 schema、做跨工具字段转换、判断某 runtime 该 key 级合并还是整文件覆盖前必读
 - [README.md](README.md)：面向公开用户的英文安装与用法说明（含 Cursor 注入 caveat）
@@ -69,7 +71,7 @@ goreleaser check
 
 ## 改动注意事项
 
-- 改 `--check`、`--repo`、`--all`、`--adopt`、`--force`、`--watch` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。
+- 改 `--check`、`--repo`、`--all`、`--adopt`、`--force`、`--watch` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。`SkipMCP` 只给 `--watch` 内部用，不要加成 CLI flag。不要加 `agentsync service install`：只维护 `contrib/systemd/` 与 `contrib/launchd/` 模板。
 - 改统一源、目标入口、备份、合并、别名降级或 Skill 根目录替换时，先读 [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
 - 实现或改 MCP 同步（统一源、Detect、写入目标、schema 转换、热文件合并）时，先读 [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)；路径表或转换规则变了必须同步该文档。
 - `CLAUDE.md` 必须保持单行 `@AGENTS.md`，不要在其中写项目规则。

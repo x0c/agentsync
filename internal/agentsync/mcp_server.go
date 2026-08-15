@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -97,14 +98,21 @@ func canonicalEntry(srv mcpServer) map[string]any {
 func parseCanonical(data []byte) ([]mcpServer, error) {
 	data = bytes.TrimSpace(data)
 	if len(data) == 0 {
-		return []mcpServer{}, nil
+		return nil, fmt.Errorf("parse mcp source: empty file")
 	}
 	var root map[string]any
 	if err := json.Unmarshal(data, &root); err != nil {
 		return nil, fmt.Errorf("parse mcp source: %w", err)
 	}
-	raw, _ := root["mcpServers"].(map[string]any)
-	return serversFromMap(raw, "cursor"), nil
+	raw, ok := root["mcpServers"]
+	if !ok {
+		return nil, fmt.Errorf("parse mcp source: missing mcpServers")
+	}
+	servers, _ := raw.(map[string]any)
+	if servers == nil {
+		return nil, fmt.Errorf("parse mcp source: mcpServers must be an object")
+	}
+	return serversFromMap(servers, "cursor"), nil
 }
 
 func serversFromMap(raw map[string]any, dialect string) []mcpServer {
@@ -272,4 +280,37 @@ func equalStringMap(a, b map[string]string) bool {
 
 func containsShellSubst(s string) bool {
 	return strings.Contains(s, "$(")
+}
+
+// isCodexBundledMCP 识别 Codex 桌面/CLI 捆绑的本机服务器。
+// 这些条目只对 Codex 有意义，写进其他工具会启动失败。
+func isCodexBundledMCP(srv mcpServer) bool {
+	base := filepath.Base(srv.Command)
+	switch base {
+	case "SkyComputerUseClient", "node_repl":
+		return true
+	}
+	if strings.Contains(srv.Command, "Codex.app") || strings.Contains(srv.Cwd, "Codex.app") {
+		return true
+	}
+	for k := range srv.Env {
+		if strings.HasPrefix(k, "NODE_REPL_") || strings.HasPrefix(k, "BROWSER_USE_") {
+			return true
+		}
+	}
+	return false
+}
+
+func filterServersForDialect(servers []mcpServer, dialect string) []mcpServer {
+	if dialect == "codex" {
+		return servers
+	}
+	out := make([]mcpServer, 0, len(servers))
+	for _, srv := range servers {
+		if isCodexBundledMCP(srv) {
+			continue
+		}
+		out = append(out, srv)
+	}
+	return out
 }

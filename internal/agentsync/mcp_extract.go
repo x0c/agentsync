@@ -104,7 +104,34 @@ func extractCodexTOML(data []byte) ([]mcpServer, error) {
 		return nil, fmt.Errorf("parse codex toml: %w", err)
 	}
 	raw, _ := root["mcp_servers"].(map[string]any)
-	return serversFromMap(raw, "codex"), nil
+	return serversFromMap(collapseDottedTOMLTables(raw), "codex"), nil
+}
+
+// collapseDottedTOMLTables 把 [mcp_servers.node_repl.env] 这类子表并回父服务器。
+// 有的 TOML 解码器会把点号路径留成同级键，不能当成另一台 MCP 服务器。
+func collapseDottedTOMLTables(raw map[string]any) map[string]any {
+	if raw == nil {
+		return raw
+	}
+	out := make(map[string]any, len(raw))
+	dotted := make([]string, 0)
+	for name, v := range raw {
+		if strings.Contains(name, ".") {
+			dotted = append(dotted, name)
+			continue
+		}
+		out[name] = v
+	}
+	for _, name := range dotted {
+		parent, rest, _ := strings.Cut(name, ".")
+		parentEntry, ok := out[parent].(map[string]any)
+		if !ok {
+			parentEntry = map[string]any{}
+			out[parent] = parentEntry
+		}
+		parentEntry[rest] = raw[name]
+	}
+	return out
 }
 
 func extractGooseYAML(data []byte) ([]mcpServer, error) {

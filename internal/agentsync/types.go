@@ -1,12 +1,13 @@
 package agentsync
 
 type Options struct {
-	Check bool
-	Repo  bool
-	All   string
-	Adopt string
-	Force bool
-	Watch bool
+	Check   bool
+	Repo    bool
+	All     string
+	Adopt   string
+	Force   bool
+	Watch   bool
+	SkipMCP bool // 内部：仅规范/Skill 变化时由 --watch 设置，避免覆盖工具侧 MCP
 }
 
 type Target struct {
