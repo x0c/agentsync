@@ -6,6 +6,7 @@ type Options struct {
 	All   string
 	Adopt string
 	Force bool
+	Watch bool
 }
 
 type Target struct {

@@ -16,6 +16,7 @@ func main() {
 	flag.StringVar(&opts.All, "all", "", "scan and manage every repository under this directory")
 	flag.StringVar(&opts.Adopt, "adopt", "", "adopt a reviewed merge draft as the canonical source")
 	flag.BoolVar(&opts.Force, "force", false, "replace conflicting files after backing them up")
+	flag.BoolVar(&opts.Watch, "watch", false, "keep running and sync when the canonical source or an installed runtime changes")
 	flag.Parse()
 
 	if err := agentsync.Run(opts); err != nil {

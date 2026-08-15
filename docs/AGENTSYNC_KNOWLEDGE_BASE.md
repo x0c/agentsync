@@ -133,7 +133,8 @@ CLAUDE.md -> AGENTS.md
 | 目录或文件（相对项目根） | 内容 | 关键类/文件数 |
 |---|---|---|
 | `main.go` | CLI 参数解析与进程退出 | `main()` |
-| `internal/agentsync/run.go` | 命令调度、规范目标同步、报告输出、批量仓库扫描 | `Run()`、`syncConfig()`、`syncTarget()`、`runAll()` |
+| `internal/agentsync/run.go` | 命令调度、规范目标同步、报告输出、批量仓库扫描 | `Run()`、`runOnce()`、`syncConfig()`、`syncTarget()`、`runAll()` |
+| `internal/agentsync/watch.go` | 后台轮询统一源与 Detect，有变化再执行全局同步 | `runWatch()`、`watchFingerprint()` |
 | `internal/agentsync/skills.go` | Skill 发现、隐藏目录保留、根目录替换、统一源物化 | `syncSkills()`、`syncSkillRoot()` |
 | `internal/agentsync/mcp.go` | MCP 统一源导入、目标写入、AGENTS 注入、gitignore | `syncMCP()`、`syncMCPTarget()` |
 | `internal/agentsync/mcp_render.go` | 各 runtime MCP schema 翻译 | `renderMCPPayload()` |
@@ -148,7 +149,7 @@ CLAUDE.md -> AGENTS.md
 
 | 场景 | 入口 | 类/方法/配置 | 说明 |
 |---|---|---|---|
-| 新增或修改 CLI 参数 | CLI 入口 | `main.go` 的 `main()`；`internal/agentsync/types.go` 的 `Options` | 参数必须写入 `Options` 后由 `Run()` 统一分发 |
+| 新增或修改 CLI 参数 | CLI 入口 | `main.go` 的 `main()`；`internal/agentsync/types.go` 的 `Options` | 参数必须写入 `Options` 后由 `Run()` 统一分发；`--watch` 走 `watchLoop()` |
 | 修改全局默认路径 | 路径配置 | `defaultGlobalConfig()` | 同步源、目标入口和 Skill 入口都在这里定义 |
 | 修改仓库模式 | 仓库配置 | `repoConfig()`；`findRepoRoot()` | 只管理当前仓库 `CLAUDE.md` 到 `AGENTS.md` |
 | 修改规范文件同步 | 规范同步 | `syncConfig()`；`syncTarget()` | 决定缺失、冲突、合并、替换和报告状态 |
@@ -187,7 +188,8 @@ CLAUDE.md -> AGENTS.md
 
 ## §6 核心规则与隐性约束
 
-- **AI 易错点**【检查模式】`--check` 必须只读。新增分支时，所有写文件、建目录、备份、删除、复制、重命名动作都必须被 `opts.Check` 拦住，否则预览命令会真实改用户目录。
+- **AI 易错点**【检查模式】`--check` 必须只读。新增分支时，所有写文件、建目录、备份、删除、复制、重命名动作都必须被 `opts.Check` 拦住，否则预览命令会真实改用户目录。`--watch` 禁止与 `--check` 组合。
+- **AI 易错点**【watch 不盯热文件】`--watch` 只指纹统一源（`AGENTS.md` / `mcp.json` / `skills/`）和 Detect 目录是否存在。监视 `~/.claude.json` 会在每次 MCP 写出后触发回环。用户改工具侧 MCP 文件不会自动拉回统一源，这是故意的。
 - **AI 易错点**【按安装门控】每个规范/Skill/MCP 入口都带 `Detect` 标志目录（工具用户级主目录）。`syncTarget()` / `syncSkillRoot()` / `syncMCPTarget()` 必须在最前面判断：`Detect` 非空且目录不存在时返回 `skipped`，绝不为未安装的工具创建目录或文件。新增 runtime 时忘了给 `Detect`，会退化成“无条件为所有工具建目录”，正是本设计要避免的。`Detect` 用主目录而非 skill 子目录（工具装了但还没建 skill 目录时也应正常收敛）。JoyCode 的 MCP 尤其不能为了落盘去创建 `~/.joycode`。
 - **AI 易错点**【先导入再替换】替换现有规范文件或 Skill 目录前，必须先把可保留内容导入统一源或写入备份；不能为了“简化”直接删除目标入口。
 - **AI 易错点**【Skill 根目录策略】工具侧 Skill 入口是整个根目录指向统一源，不是每个 skill 单独建链接。回退到逐个 skill 链接会重新引入删除/重命名不同步问题。

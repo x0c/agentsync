@@ -10,6 +10,7 @@
 |---|---|---:|---|---|
 | 预览全局收敛 | `agentsync --check` | 否 | `Results`、`Skills`、`MCP`、可能的 `Merge draft` | `main.go`；`internal/agentsync/run.go` |
 | 执行全局收敛 | `agentsync` | 是 | 统一源、目标别名、备份、Skill 结果、MCP 结果 | `internal/agentsync/run.go`；`internal/agentsync/skills.go`；`internal/agentsync/mcp.go` |
+| 后台持续收敛 | `agentsync --watch` | 是（有变化时） | 首次同步后，统一源或新装 runtime 变化再同步 | `internal/agentsync/watch.go` |
 | 收敛当前仓库 | `agentsync --repo` | 是 | 当前仓库 `CLAUDE.md` 指向 `AGENTS.md` | `internal/agentsync/paths.go` |
 | 批量收敛仓库 | `agentsync --all ~/Codes` | 是 | 扫描到的仓库数量与每个仓库结果 | `internal/agentsync/run.go` |
 | 采纳合并草稿 | `agentsync --adopt <draft>` | 是 | 备份原统一源并用草稿替换 | `internal/agentsync/merge.go` |
@@ -22,10 +23,12 @@ flowchart TD
     A[main.go 解析 flag] --> B[agentsync.Run]
     B -->|--all| C[runAll 扫描 Git 仓库]
     B -->|--repo| D[repoConfig 使用仓库 AGENTS.md]
+    B -->|--watch| W[watchLoop 轮询统一源与 Detect]
     B -->|默认| E[defaultGlobalConfig 使用用户级统一源]
     D --> F[syncConfig]
     E --> F
     C --> F
+    W --> F
     B -->|--adopt| G[adoptDraft]
     G --> F
     F --> H[syncTarget 处理规范文件入口]
@@ -79,6 +82,14 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
 | `blocked` | 目标不是可处理的普通文件或目录 | 人工判断后再处理 |
 
 **AI 易错点**：不要把 `--check` 报告里的 “would ...” 当作已修复。它只说明下一次真实运行会做什么。
+
+## 后台监听
+
+MCP 配置不能整文件 symlink，Cursor 的 `AGENTS.mdc` 也是受管副本。`--watch` 用标准库轮询（默认 2 秒）统一源 `AGENTS.md` / `mcp.json` / `skills/`，以及各 runtime `Detect` 目录是否出现；变化经过短防抖后调用一次普通全局同步。它**不**监视 `~/.claude.json` 等热文件，避免写回环。用户应只改统一源。
+
+不能与 `--check`、`--repo`、`--all`、`--adopt` 同时使用。失败会打到 stderr 并继续监听，方便当 systemd/launchd 服务。
+
+Linux 用户单元模板：`contrib/systemd/agentsync.service`（`ExecStart` 默认 `%h/.local/bin/agentsync --watch`）。macOS 模板：`contrib/launchd/top.x0c.agentsync.plist`，需改成实际二进制路径。
 
 ## 仓库模式
 

@@ -115,6 +115,25 @@ agentsync
 
 Running `agentsync` repeatedly is intended to be idempotent. After the first convergence, later runs should report `ok` for managed aliases.
 
+Keep it applied without running the command by hand:
+
+```bash
+agentsync --watch
+```
+
+This polls the canonical `AGENTS.md`, `mcp.json`, `skills/`, and whether each runtime's home directory exists. Edit the canonical files (or install a new agent) and the copies are rewritten for you. MCP configs cannot be symlinks, so this is how those stay in sync. `--watch` cannot be combined with `--check`, `--repo`, `--all`, or `--adopt`.
+
+A systemd user unit lives in `contrib/systemd/agentsync.service`. On Linux:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/agentsync.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now agentsync.service
+```
+
+On macOS, copy `contrib/launchd/top.x0c.agentsync.plist`, point `ProgramArguments` at `$(which agentsync)`, then `launchctl load` it.
+
 ## Repository Mode
 
 Inside a Git repository:

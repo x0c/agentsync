@@ -8,6 +8,16 @@ import (
 )
 
 func Run(opts Options) error {
+	if opts.Watch {
+		if opts.Check || opts.Repo || opts.All != "" || opts.Adopt != "" {
+			return fmt.Errorf("--watch cannot be combined with --check, --repo, --all, or --adopt")
+		}
+		return runWatch(opts)
+	}
+	return runOnce(opts)
+}
+
+func runOnce(opts Options) error {
 	if opts.All != "" {
 		return runAll(opts)
 	}

@@ -56,7 +56,7 @@ goreleaser check
 
 | 领域 | 入口锚点 |
 |------|---------|
-| 命令调度与运行模式 | main.go；internal/agentsync/run.go |
+| 命令调度与运行模式 | main.go；internal/agentsync/run.go；internal/agentsync/watch.go |
 | 规范文件收敛 | internal/agentsync/run.go；internal/agentsync/merge.go |
 | Skill 根目录收敛 | internal/agentsync/skills.go |
 | MCP 配置收敛 | internal/agentsync/mcp.go；internal/agentsync/mcp_render.go；internal/agentsync/mcp_apply.go |
@@ -69,7 +69,7 @@ goreleaser check
 
 ## 改动注意事项
 
-- 改 `--check`、`--repo`、`--all`、`--adopt`、`--force` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。
+- 改 `--check`、`--repo`、`--all`、`--adopt`、`--force`、`--watch` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。
 - 改统一源、目标入口、备份、合并、别名降级或 Skill 根目录替换时，先读 [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
 - 实现或改 MCP 同步（统一源、Detect、写入目标、schema 转换、热文件合并）时，先读 [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)；路径表或转换规则变了必须同步该文档。
 - `CLAUDE.md` 必须保持单行 `@AGENTS.md`，不要在其中写项目规则。

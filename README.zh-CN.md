@@ -8,7 +8,7 @@
 
 ## 只处理已安装的工具
 
-每个受支持的工具都用它自己的主目录（如 `~/.codex`、`~/.gemini`、`~/.joycode`）做安装判断。如果该目录不存在，agentsync 视为该工具**未安装**，报告为 `skipped`，绝不会为你没用的工具创建目录或入口文件。装了新工具后再次运行 `agentsync`，下一轮自动收敛。
+每个受支持的工具都用它自己的主目录（如 `~/.codex`、`~/.gemini`、`~/.joycode`）做安装判断。如果该目录不存在，agentsync 视为该工具**未安装**，报告为 `skipped`，绝不会为你没用的工具创建目录或入口文件。装了新工具后跑一次 `agentsync`（或开着 `--watch`）就会收敛。
 
 ## 管理对象
 
@@ -114,6 +114,25 @@ agentsync
 ```
 
 `agentsync` 设计为幂等命令。第一次完成收敛后，后续重复运行应看到托管入口都是 `ok`。
+
+不想每次手跑的话，开监听：
+
+```bash
+agentsync --watch
+```
+
+它会轮询统一源 `AGENTS.md`、`mcp.json`、`skills/`，以及各工具主目录是否出现。改统一源或新装了一个 agent，就会自动把副本写回去。MCP 配置不能软链接，所以靠这个保持同步。`--watch` 不能和 `--check`、`--repo`、`--all`、`--adopt` 一起用。
+
+Linux 可用 `contrib/systemd/agentsync.service`：
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/agentsync.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now agentsync.service
+```
+
+macOS 可拷 `contrib/launchd/top.x0c.agentsync.plist`，把 `ProgramArguments` 改成 `$(which agentsync)` 的路径，再 `launchctl load`。
 
 ## 仓库模式
 

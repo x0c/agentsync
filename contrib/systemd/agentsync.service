@@ -1,0 +1,13 @@
+[Unit]
+Description=agentsync watch (global instructions, skills, MCP)
+Documentation=https://github.com/x0c/agentsync
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/agentsync --watch
+Restart=on-failure
+RestartSec=5
+Environment=HOME=%h
+
+[Install]
+WantedBy=default.target
