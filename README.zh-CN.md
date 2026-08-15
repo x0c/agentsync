@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-`agentsync` 是一个小型 Go CLI，用来把 AI coding agent 的全局指令和可复用 Skill 统一收敛到一个源目录。
+`agentsync` 是一个小型 Go CLI，用来把 AI coding agent 的全局指令、可复用 Skill 和 MCP 服务器配置统一收敛到一个源目录。
 
 它解决 Codex、Claude Code、OpenCode、Gemini CLI、Qwen Code、Copilot CLI、Kimi Code、Grok、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
 
@@ -71,6 +71,14 @@ Cursor 入口是带 `alwaysApply: true` frontmatter 的受管 `.mdc`（不是裸
 
 每个 Skill 在统一 Skill 根目录下按完整目录管理。目录内必须包含 `SKILL.md`，旁边的脚本、模板、参考资料和资源文件会一起保留。由于工具侧 Skill 根目录整体指向统一根目录，新增、删除或重命名统一源中的 Skill 会立即反映到所有工具侧。
 
+统一 MCP 配置：
+
+```text
+~/.config/agentsync/mcp.json
+```
+
+全局模式（不是 `--repo` / `--all`）会把该文件按各已安装工具的 schema 写进用户级 MCP 入口。`~/.claude.json`、`~/.codex/config.toml` 这类混杂热文件只改 MCP 那个 key；`~/.cursor/mcp.json` 这类独立 MCP 文件整段覆盖。不同步 iFlow，也不为 `~/.agents` 造 MCP 入口。请只改统一源——agentsync 会在 `~/.config/agentsync/AGENTS.md` 里注入提醒。若配置目录本身是 git 仓库，会把 `mcp.json` 写入 `.gitignore`（里面常有 token）。
+
 ## 安装
 
 使用 Homebrew：
@@ -99,7 +107,7 @@ go install .
 agentsync --check
 ```
 
-一键收敛全局指令和 Skill：
+一键收敛全局指令、Skill 和 MCP 配置：
 
 ```bash
 agentsync
@@ -132,6 +140,7 @@ agentsync --all ~/Codes
 - `--check` 只读。
 - 已有独特指令内容会先并入统一源文件，再创建软链接。
 - 已有 Skill 目录会先复制到统一 Skill 目录，再将工具侧 Skill 根目录替换成软链接。
+- MCP 服务器会先导入 `~/.config/agentsync/mcp.json`（同名时已安装工具按清单顺序先到先得），再按各工具 schema 覆盖已安装入口。`--repo` 与 `--all` 不同步 MCP。
 - 替换前的文件和目录会备份到 `~/.config/agentsync/backups/`。
 - Codex `.system` 这类隐藏内部 Skill 目录会先保留到统一 Skill 根目录，再替换工具侧 Skill 根目录。
 - macOS 和 Linux 优先使用软链接。

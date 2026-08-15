@@ -579,9 +579,12 @@ func TestDefaultGlobalConfigGatesEveryTarget(t *testing.T) {
 			t.Fatalf("规范入口缺少 Detect 门控: %s", tgt.Path)
 		}
 	}
-	for _, tgt := range cfg.SkillTargets {
+	for _, tgt := range cfg.MCPTargets {
 		if tgt.Detect == "" {
-			t.Fatalf("Skill 入口缺少 Detect 门控: %s", tgt.Path)
+			t.Fatalf("MCP 入口缺少 Detect 门控: %s", tgt.Path)
+		}
+		if tgt.Name == "iflow" {
+			t.Fatalf("iFlow 不应出现在 MCP 目标中: %+v", tgt)
 		}
 	}
 }

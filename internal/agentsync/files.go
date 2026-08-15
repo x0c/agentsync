@@ -69,7 +69,7 @@ func sameContent(a, b string) bool {
 }
 
 // isManagedAgentsyncFile 判断目标是否为 agentsync 自己写出的受管副本
-//（含 Cursor .mdc：frontmatter + managed marker）。这类文件是统一源的衍生品，
+// （含 Cursor .mdc：frontmatter + managed marker）。这类文件是统一源的衍生品，
 // 过期时应以统一源为准直接替换，禁止再把旧正文 append 回统一源。
 func isManagedAgentsyncFile(path string) bool {
 	data, err := os.ReadFile(path)
@@ -254,6 +254,40 @@ func copyDir(src, dst string) error {
 		}
 		return copyFile(path, target, info.Mode().Perm())
 	})
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	if err := ensureParent(path); err != nil {
+		return err
+	}
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".agentsync-tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	cleanup = false
+	return nil
 }
 
 func copyFile(src, dst string, perm os.FileMode) error {

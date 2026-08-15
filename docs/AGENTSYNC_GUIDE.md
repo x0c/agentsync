@@ -8,8 +8,8 @@
 
 | 场景 | 命令 | 是否写文件 | 主要输出 | 实现入口 |
 |---|---|---:|---|---|
-| 预览全局收敛 | `agentsync --check` | 否 | `Results`、`Skills`、可能的 `Merge draft` | `main.go`；`internal/agentsync/run.go` |
-| 执行全局收敛 | `agentsync` | 是 | 统一源、目标别名、备份、Skill 结果 | `internal/agentsync/run.go`；`internal/agentsync/skills.go` |
+| 预览全局收敛 | `agentsync --check` | 否 | `Results`、`Skills`、`MCP`、可能的 `Merge draft` | `main.go`；`internal/agentsync/run.go` |
+| 执行全局收敛 | `agentsync` | 是 | 统一源、目标别名、备份、Skill 结果、MCP 结果 | `internal/agentsync/run.go`；`internal/agentsync/skills.go`；`internal/agentsync/mcp.go` |
 | 收敛当前仓库 | `agentsync --repo` | 是 | 当前仓库 `CLAUDE.md` 指向 `AGENTS.md` | `internal/agentsync/paths.go` |
 | 批量收敛仓库 | `agentsync --all ~/Codes` | 是 | 扫描到的仓库数量与每个仓库结果 | `internal/agentsync/run.go` |
 | 采纳合并草稿 | `agentsync --adopt <draft>` | 是 | 备份原统一源并用草稿替换 | `internal/agentsync/merge.go` |
@@ -30,8 +30,10 @@ flowchart TD
     G --> F
     F --> H[syncTarget 处理规范文件入口]
     F --> I[syncSkills 处理 Skill 根目录]
+    F --> K[syncMCP 处理 MCP 配置]
     H --> J[printReport]
     I --> J
+    K --> J
 ```
 
 命令入口只负责参数到 `Options` 的映射。实际工作都汇入 `Run()`：先判断是否批量仓库模式，再根据全局/仓库模式生成配置，最后执行 `syncConfig()` 并打印报告。
@@ -44,6 +46,7 @@ flowchart TD
 |---|---|---|
 | 规范统一源 | `~/.config/agentsync/AGENTS.md` | 所有工具共享的指令文件 |
 | Skill 统一源 | `~/.config/agentsync/skills` | 每个子目录是一个完整 skill |
+| MCP 统一源 | `~/.config/agentsync/mcp.json` | 所有已安装工具共享的 MCP 服务器集合 |
 
 规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
 
@@ -54,13 +57,15 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
             （整体指向 Skill 统一源）
 ```
 
-**按安装门控**：每个入口只在对应工具已安装（其用户级主目录如 `~/.codex`、`~/.joycode` 存在）时才收敛；未安装的工具报告为 `skipped`，不创建任何文件。因此在同一台机器上 `Results` / `Skills` 里出现的入口取决于你实际装了哪些工具。
+**按安装门控**：每个入口只在对应工具已安装（其用户级主目录如 `~/.codex`、`~/.joycode` 存在）时才收敛；未安装的工具报告为 `skipped`，不创建任何文件。因此在同一台机器上 `Results` / `Skills` / `MCP` 里出现的入口取决于你实际装了哪些工具。
 
 第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态，未装的工具显示 `skipped`。第二次运行已安装工具应收敛到 `ok`，这是幂等性判断的主要用户信号。
 
+全局模式还会把 `mcp.json` 翻译写入已安装工具的用户级 MCP 配置，并在 `AGENTS.md` 注入「只改统一源」说明。仓库模式与 `--all` 不同步 MCP。落点与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
+
 ## 检查模式
 
-`--check` 只做状态判定，不创建统一源、不写备份、不替换入口、不复制 skill。报告中的状态含义：
+`--check` 只做状态判定，不创建统一源、不写备份、不替换入口、不复制 skill、不写 MCP 配置。报告中的状态含义：
 
 | 状态 | 含义 | 下一步 |
 |---|---|---|
@@ -85,7 +90,7 @@ CLAUDE.md -> AGENTS.md
 
 仓库模式通过 `findRepoRoot()` 找 `.git`，再由 `repoConfig()` 构造配置。目标使用相对链接模式，便于仓库移动目录后链接仍成立。
 
-仓库模式不处理全局 Skill 目录，也不处理用户级全局规范入口。
+仓库模式不处理全局 Skill 目录、用户级全局规范入口，也不处理 MCP。
 
 ## 批量仓库模式
 

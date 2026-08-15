@@ -98,7 +98,53 @@ func defaultGlobalConfig() (Config, error) {
 		}
 		skillTargets[i].Detect = d
 	}
-	return Config{Source: source, Targets: targets, SkillSource: skillSource, SkillTargets: skillTargets}, nil
+	mcpSource, err := expandPath("~/.config/agentsync/mcp.json")
+	if err != nil {
+		return Config{}, err
+	}
+	mcpTargets := []MCPTarget{
+		{Name: "codex", Path: "~/.codex/config.toml", Detect: "~/.codex", Dialect: "codex", Format: "toml", Mode: "key"},
+		{Name: "claude", Path: "~/.claude.json", Detect: "~/.claude", Dialect: "claude", Format: "json", Mode: "key"},
+		{Name: "opencode", Path: "~/.config/opencode/opencode.json", Detect: "~/.config/opencode", Dialect: "opencode", Format: "json", Mode: "key"},
+		{Name: "gemini", Path: "~/.gemini/settings.json", Detect: "~/.gemini", Dialect: "gemini", Format: "json", Mode: "key"},
+		{Name: "qwen", Path: "~/.qwen/settings.json", Detect: "~/.qwen", Dialect: "gemini", Format: "json", Mode: "key"},
+		{Name: "copilot", Path: "~/.copilot/mcp-config.json", Detect: "~/.copilot", Dialect: "cursor", Format: "json", Mode: "file"},
+		{Name: "kimi-code", Path: "~/.kimi-code/mcp.json", Detect: "~/.kimi-code", Dialect: "cursor", Format: "json", Mode: "file"},
+		{Name: "grok", Path: "~/.grok/user-settings.json", Detect: "~/.grok", Dialect: "grok", Format: "json", Mode: "key"},
+		{Name: "amp", Path: "~/.config/amp/settings.json", Detect: "~/.config/amp", Dialect: "amp", Format: "json", Mode: "key"},
+		{Name: "crush", Path: "~/.config/crush/crush.json", Detect: "~/.config/crush", Dialect: "crush", Format: "json", Mode: "key"},
+		{Name: "goose", Path: "~/.config/goose/config.yaml", Detect: "~/.config/goose", Dialect: "goose", Format: "yaml", Mode: "key"},
+		{Name: "factory", Path: "~/.factory/mcp.json", Detect: "~/.factory", Dialect: "cursor", Format: "json", Mode: "file"},
+		{Name: "kilo", Path: "~/.config/kilo/kilo.jsonc", Detect: "~/.config/kilo", Dialect: "opencode", Format: "jsonc", Mode: "key"},
+		{Name: "cursor", Path: "~/.cursor/mcp.json", Detect: "~/.cursor", Dialect: "cursor", Format: "json", Mode: "file"},
+		{Name: "windsurf", Path: "~/.codeium/windsurf/mcp_config.json", Detect: "~/.codeium/windsurf", Dialect: "windsurf", Format: "json", Mode: "file"},
+		{Name: "zed", Path: "~/.config/zed/settings.json", Detect: "~/.config/zed", Dialect: "zed", Format: "json", Mode: "key"},
+		{Name: "codebuddy", Path: "~/.codebuddy/.mcp.json", Detect: "~/.codebuddy", Dialect: "cursor", Format: "json", Mode: "file"},
+		{Name: "qoder", Path: "~/.qoder/settings.json", Detect: "~/.qoder", Dialect: "claude", Format: "json", Mode: "key"},
+		{Name: "junie", Path: "~/.junie/mcp/mcp.json", Detect: "~/.junie", Dialect: "cursor", Format: "json", Mode: "file"},
+		{Name: "kiro", Path: "~/.kiro/settings/mcp.json", Detect: "~/.kiro", Dialect: "cursor", Format: "json", Mode: "file"},
+		{Name: "joycode", Path: "~/.joycode/joycode-mcp.json", Detect: "~/.joycode", Dialect: "cursor", Format: "json", Mode: "file"},
+	}
+	for i := range mcpTargets {
+		p, err := expandPath(mcpTargets[i].Path)
+		if err != nil {
+			return Config{}, err
+		}
+		mcpTargets[i].Path = p
+		d, err := expandPath(mcpTargets[i].Detect)
+		if err != nil {
+			return Config{}, err
+		}
+		mcpTargets[i].Detect = d
+	}
+	return Config{
+		Source:       source,
+		Targets:      targets,
+		SkillSource:  skillSource,
+		SkillTargets: skillTargets,
+		MCPSource:    mcpSource,
+		MCPTargets:   mcpTargets,
+	}, nil
 }
 
 func repoConfig(root string) Config {

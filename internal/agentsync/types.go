@@ -21,6 +21,17 @@ type Config struct {
 	Targets      []Target
 	SkillSource  string
 	SkillTargets []SkillTarget
+	MCPSource    string
+	MCPTargets   []MCPTarget
+}
+
+type MCPTarget struct {
+	Name    string
+	Path    string
+	Detect  string
+	Dialect string
+	Format  string
+	Mode    string
 }
 
 type SkillTarget struct {
@@ -39,6 +50,7 @@ type RunReport struct {
 	Source       string
 	Results      []TargetResult
 	SkillResults []TargetResult
+	MCPResults   []TargetResult
 	MergeDraft   string
 	Backups      []string
 	Repositories int

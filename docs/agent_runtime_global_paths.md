@@ -2,6 +2,7 @@
 
 > 调研日期：2026-07-18 · 信息以各工具**官方文档**为最高优先级，社区来源均已标注置信度
 > 符号约定：`~` = 用户主目录（macOS/Linux 为 `$HOME`；Windows 为 `%USERPROFILE%`，即 `C:\Users\<用户名>`）；`<ws>` = 项目/工作区根目录
+> 用户级 MCP 配置落点、写入策略与跨工具 schema 转换见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)（2026-08-15；由 `agentsync` 全局模式同步 `~/.config/agentsync/mcp.json`）。
 
 ## 一、总览速查表（按阵营分组）
 
@@ -114,6 +115,7 @@
 | Copilot agents 同名优先级 | 官方两份文档互相矛盾（项目级 vs 用户级优先），建议实测 |
 | OpenHands 全局 skills | 官方两处不一致：`~/.openhands/skills/` vs `~/.agents/skills/` |
 | Trae / 灵码 / Comate / JoyCode 全局规则磁盘路径 | 官方均未公开，表中社区路径已逐一标注置信度 |
+| JoyCode MCP | 用户级已钉死为 `~/.joycode/joycode-mcp.json`（扩展源码）；规则文件磁盘路径仍未公开。见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md) |
 | joycode-cli | 不存在官方独立 CLI，JoyCode 仅 IDE + VS Code 插件形态 |
 | Grok CLI | xAI 无官方 CLI，表中为主流社区实现 superagent-ai/grok-cli |
 | Claude Code `~/.claude/commands/` | 命令已并入 skills，新版文档未单列用户级命令目录（旧文档曾明确，高置信仍存在） |

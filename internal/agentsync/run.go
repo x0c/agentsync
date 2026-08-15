@@ -37,6 +37,8 @@ func Run(opts Options) error {
 				return err
 			}
 			report.Results = r.Results
+			report.SkillResults = r.SkillResults
+			report.MCPResults = r.MCPResults
 			report.MergeDraft = r.MergeDraft
 			report.Backups = append(report.Backups, r.Backups...)
 		}
@@ -81,6 +83,16 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 		report.Results = append(report.Results, TargetResult{Path: cfg.Source, Status: status, Detail: detail})
 	}
 
+	if cfg.MCPSource != "" && len(cfg.MCPTargets) > 0 {
+		notice, err := syncMCPNotice(cfg.Source, opts)
+		if err != nil {
+			return report, err
+		}
+		if notice != nil {
+			report.MCPResults = append(report.MCPResults, *notice)
+		}
+	}
+
 	for _, target := range cfg.Targets {
 		result, backup, err := syncTarget(cfg.Source, target, opts)
 		if err != nil {
@@ -97,6 +109,12 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 	}
 	report.SkillResults = append(report.SkillResults, skillResults...)
 	report.Backups = append(report.Backups, skillBackups...)
+	mcpResults, mcpBackups, err := syncMCP(cfg, opts)
+	if err != nil {
+		return report, err
+	}
+	report.MCPResults = append(report.MCPResults, mcpResults...)
+	report.Backups = append(report.Backups, mcpBackups...)
 	return report, nil
 }
 
@@ -379,6 +397,17 @@ func printReport(report RunReport, opts Options) {
 	if len(report.SkillResults) > 0 {
 		fmt.Println("Skills:")
 		for _, r := range report.SkillResults {
+			if r.Detail != "" {
+				fmt.Printf("  %-12s %s (%s)\n", r.Status, r.Path, r.Detail)
+			} else {
+				fmt.Printf("  %-12s %s\n", r.Status, r.Path)
+			}
+		}
+		fmt.Println()
+	}
+	if len(report.MCPResults) > 0 {
+		fmt.Println("MCP:")
+		for _, r := range report.MCPResults {
 			if r.Detail != "" {
 				fmt.Printf("  %-12s %s (%s)\n", r.Status, r.Path, r.Detail)
 			} else {

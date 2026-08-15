@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-`agentsync` is a small Go CLI that keeps AI coding-agent instructions and reusable skills in one canonical place.
+`agentsync` is a small Go CLI that keeps AI coding-agent instructions, reusable skills, and MCP server configs in one canonical place.
 
 It prevents drift across many AI coding agents — Codex, Claude Code, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Cursor, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and more — by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
 
@@ -71,6 +71,14 @@ Tool-specific skill aliases (created only when the runtime is installed), each p
 
 Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately.
 
+Canonical MCP config:
+
+```text
+~/.config/agentsync/mcp.json
+```
+
+On global `agentsync` (not `--repo` / `--all`), that file is translated into each installed runtime's user-level MCP config. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow is skipped. `~/.agents` has no MCP entry. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. If the config directory is a git repo, `mcp.json` is added to `.gitignore` (it often contains tokens).
+
 ## Install
 
 With Homebrew:
@@ -99,7 +107,7 @@ Preview changes without writing anything:
 agentsync --check
 ```
 
-Converge global instructions and skills:
+Converge global instructions, skills, and MCP configs:
 
 ```bash
 agentsync
@@ -132,6 +140,7 @@ agentsync --all ~/Codes
 - `--check` is read-only.
 - Existing unique instruction content is appended to the canonical source before aliases are created.
 - Existing skill directories are copied into the canonical skill directory before tool-specific skill roots are replaced with aliases.
+- MCP servers are imported once into `~/.config/agentsync/mcp.json` (first installed runtime wins on name clashes), then overwritten onto installed tools using each tool's schema. `--repo` and `--all` do not sync MCP.
 - Replaced files and directories are backed up under `~/.config/agentsync/backups/`.
 - Hidden skill directories such as Codex `.system` internals are preserved in the canonical skill root before tool-specific skill roots are replaced.
 - macOS and Linux use symlinks first.
