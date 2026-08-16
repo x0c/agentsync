@@ -4,7 +4,7 @@ English | [简体中文](README.zh-CN.md)
 
 `agentsync` is a small Go CLI that keeps AI coding-agent instructions, reusable skills, and MCP server configs in one canonical place.
 
-It prevents drift across many AI coding agents — Codex, Claude Code, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Cursor, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and more — by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
+It prevents drift across many AI coding agents — Codex, Claude Code, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Pi, Cursor, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and more — by converging their global instruction files and `SKILL.md` directories into shared sources under `~/.config/agentsync`.
 
 ## Only Touches Installed Runtimes
 
@@ -35,6 +35,7 @@ Tool-specific instruction aliases (created only when the runtime is installed):
 ~/.factory/AGENTS.md
 ~/.iflow/IFLOW.md
 ~/.config/kilo/AGENTS.md
+~/.pi/agent/AGENTS.md
 ~/.cursor/rules/AGENTS.mdc
 ~/.codeium/windsurf/memories/global_rules.md
 ~/.config/zed/AGENTS.md
@@ -69,7 +70,7 @@ Tool-specific skill aliases (created only when the runtime is installed), each p
 ~/.agents/skills
 ```
 
-Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately.
+Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately. Pi has no dedicated skill alias because it reads `~/.agents/skills/` natively.
 
 Canonical MCP config:
 

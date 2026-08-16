@@ -35,6 +35,7 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.factory/AGENTS.md", Mode: "link", Detect: "~/.factory"},
 		{Path: "~/.iflow/IFLOW.md", Mode: "link", Detect: "~/.iflow"},
 		{Path: "~/.config/kilo/AGENTS.md", Mode: "link", Detect: "~/.config/kilo"},
+		{Path: "~/.pi/agent/AGENTS.md", Mode: "link", Detect: "~/.pi/agent"},
 		// IDE / 编辑器系 Agent
 		{Path: "~/.cursor/rules/AGENTS.mdc", Mode: "cursor", Detect: "~/.cursor"},
 		{Path: "~/.codeium/windsurf/memories/global_rules.md", Mode: "link", Detect: "~/.codeium/windsurf"},
@@ -124,6 +125,9 @@ func defaultGlobalConfig() (Config, error) {
 		{Name: "junie", Path: "~/.junie/mcp/mcp.json", Detect: "~/.junie", Dialect: "cursor", Format: "json", Mode: "file"},
 		{Name: "kiro", Path: "~/.kiro/settings/mcp.json", Detect: "~/.kiro", Dialect: "cursor", Format: "json", Mode: "file"},
 		{Name: "joycode", Path: "~/.joycode/joycode-mcp.json", Detect: "~/.joycode", Dialect: "cursor", Format: "json", Mode: "file"},
+		// pi 无内置 MCP；官方 pi-mcp-adapter 扩展读共享全局 ~/.config/mcp/mcp.json（优先级最高，
+		// 且 adapter 承诺只写自有覆盖文件、绝不回写该共享文件），按 Detect ~/.pi/agent 门控。
+		{Name: "pi", Path: "~/.config/mcp/mcp.json", Detect: "~/.pi/agent", Dialect: "cursor", Format: "json", Mode: "file"},
 	}
 	for i := range mcpTargets {
 		p, err := expandPath(mcpTargets[i].Path)

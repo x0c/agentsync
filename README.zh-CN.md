@@ -4,7 +4,7 @@
 
 `agentsync` 是一个小型 Go CLI，用来把 AI coding agent 的全局指令、可复用 Skill 和 MCP 服务器配置统一收敛到一个源目录。
 
-它解决 Codex、Claude Code、OpenCode、Gemini CLI、Qwen Code、Copilot CLI、Kimi Code、Grok、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
+它解决 Codex、Claude Code、OpenCode、Gemini CLI、Qwen Code、Copilot CLI、Kimi Code、Grok、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Pi、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具各自维护 `AGENTS.md`、`CLAUDE.md` 和 `SKILL.md` 目录导致内容漂移的问题。
 
 ## 只处理已安装的工具
 
@@ -35,6 +35,7 @@
 ~/.factory/AGENTS.md
 ~/.iflow/IFLOW.md
 ~/.config/kilo/AGENTS.md
+~/.pi/agent/AGENTS.md
 ~/.cursor/rules/AGENTS.mdc
 ~/.codeium/windsurf/memories/global_rules.md
 ~/.config/zed/AGENTS.md
@@ -69,7 +70,7 @@ Cursor 入口是带 `alwaysApply: true` frontmatter 的受管 `.mdc`（不是裸
 ~/.agents/skills
 ```
 
-每个 Skill 在统一 Skill 根目录下按完整目录管理。目录内必须包含 `SKILL.md`，旁边的脚本、模板、参考资料和资源文件会一起保留。由于工具侧 Skill 根目录整体指向统一根目录，新增、删除或重命名统一源中的 Skill 会立即反映到所有工具侧。
+每个 Skill 在统一 Skill 根目录下按完整目录管理。目录内必须包含 `SKILL.md`，旁边的脚本、模板、参考资料和资源文件会一起保留。由于工具侧 Skill 根目录整体指向统一根目录，新增、删除或重命名统一源中的 Skill 会立即反映到所有工具侧。Pi 原生读 `~/.agents/skills/`，因此不建专属 Skill 别名。
 
 统一 MCP 配置：
 

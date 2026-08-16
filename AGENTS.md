@@ -1,6 +1,22 @@
+<!-- managed:inherited-agents:start -->
+<!-- source: /Users/geraltgraham/Codes/AgentSync/AGENTS.md -->
+# AgentSync
+
+Agent 全局规范与 Skill 同步 CLI，管理 `~/.config/agentsync/` 中的 skills 和知识库。
+
+> **仓库根在 `cli/`,不在本目录**。git 仓库、Go module、`.goreleaser.yml`、发布 workflow 全部位于 `cli/`;在本目录(`AgentSync/`)直接跑 `git`/`go` 会报 `not a git repository`。所有 git、构建、测试、发布操作都要先进 `cli/`。本目录只是工作区容器,自身不受版本管理。
+
+通用工程规范：[Go 规范](../_standards/go.md)
+
+## 文档导航
+
+- [cli/AGENTS.md](cli/AGENTS.md)：改、评审或发布 agentsync CLI 工具前必读。Remote：`https://github.com/x0c/agentsync.git`
+
+<!-- managed:inherited-agents:end -->
+
 # agentsync 项目规范
 
-agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
+agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Pi、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
 
 本仓是工具型项目，不按传统业务域拆文档；文档入口按用户工作流和命令能力组织。
 
@@ -9,7 +25,7 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 - 全局规范源：`~/.config/agentsync/AGENTS.md`
 - 全局 Skill 源：`~/.config/agentsync/skills/`
 - 全局 MCP 源：`~/.config/agentsync/mcp.json`（本机文件，常含 token，不进 git / Syncthing；按已安装 runtime 翻译后写入各自用户级 MCP 入口；不整文件 symlink 混杂热文件）
-- 全局工具入口：覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 各自的用户级规范文件，外加通用 `~/.agents/AGENTS.md`。完整清单与各自路径见 `internal/agentsync/paths.go` 的 `defaultGlobalConfig()`。Cursor 使用 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`，带 `alwaysApply` frontmatter 的受管副本，不是裸 symlink）。
+- 全局工具入口：覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Pi、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 各自的用户级规范文件，外加通用 `~/.agents/AGENTS.md`。完整清单与各自路径见 `internal/agentsync/paths.go` 的 `defaultGlobalConfig()`。Cursor 使用 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`，带 `alwaysApply` frontmatter 的受管副本，不是裸 symlink）。Pi 用 `~/.pi/agent/AGENTS.md`，其 Skill 走 pi 原生扫描的 `~/.agents/skills/`，不建专属别名。
 - 全局 Skill 入口：上述工具各自的用户级 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.cursor/skills`、`~/.joycode/skills` 等），外加通用 `~/.agents/skills`。
 - **按安装门控**：每个入口都带一个 `Detect` 标志目录（该工具的用户级主目录，如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，同步时报告 `skipped`，绝不为未安装的工具创建任何目录或入口文件。新增 runtime 时必须同时给出正确的 `Detect`。MCP 入口同样按 Detect 门控；iFlow 的 MCP 不同步，`~/.agents` 无 MCP 入口。
 - 项目级入口：仓库内 `AGENTS.md` 与 `CLAUDE.md`

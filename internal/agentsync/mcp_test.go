@@ -99,6 +99,88 @@ func TestSyncMCPJoyCodeDoesNotCreateDetect(t *testing.T) {
 	}
 }
 
+func TestSyncMCPPiWritesSharedGlobalConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	piAgentDir := filepath.Join(dir, ".pi", "agent")
+	if err := os.MkdirAll(piAgentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, ".config", "mcp", "mcp.json")
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "pi",
+			Path:    target,
+			Detect:  piAgentDir,
+			Dialect: "cursor",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if err := os.WriteFile(cfg.MCPSource, []byte(`{
+  "mcpServers": {
+    "shared": {"type": "http", "url": "https://example/mcp", "headers": {"x-token": "t"}},
+    "local": {"type": "stdio", "command": "npx", "args": ["-y", "some-mcp"]},
+    "node_repl": {"type": "stdio", "command": "/tmp/node_repl", "env": {"NODE_REPL_FOO": "1"}}
+  }
+}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	servers, err := parseCanonicalFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasServer(servers, "shared") || !hasServer(servers, "local") {
+		t.Fatalf("pi shared global config missing servers: %+v", servers)
+	}
+	if hasServer(servers, "node_repl") {
+		t.Fatalf("pi must not receive Codex bundled servers: %+v", servers)
+	}
+}
+
+func TestSyncMCPPiSkippedWithoutAgentDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, ".config", "mcp", "mcp.json")
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "pi",
+			Path:    target,
+			Detect:  filepath.Join(dir, ".pi", "agent"),
+			Dialect: "cursor",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if err := os.WriteFile(cfg.MCPSource, []byte(`{"mcpServers": {"shared": {"type": "http", "url": "https://example/mcp"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pathExists(filepath.Dir(target)) {
+		t.Fatalf("pi not installed: shared mcp dir must not be created")
+	}
+	if !hasMCPStatus(report, target, "skipped") {
+		t.Fatalf("expected skipped, got %+v", report.MCPResults)
+	}
+}
+
 func TestSyncMCPImportsUnionThenOverwrites(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
