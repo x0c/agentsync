@@ -91,7 +91,7 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 ### Claude Code（最高风险热文件）
 
 - **只改** `~/.claude.json` 顶层 `mcpServers`。`claude mcp add --scope user` 写的就是这里。
-- **不要读、不要写、不要对齐** `~/.claude/.mcp.json`。官方排错白名单写明 Claude 不读该路径；本机 `arthas-mcp` 只存在于 `~/.claude.json` 却能被 `claude mcp list` 列为 User config。
+- **不要读、不要写、不要对齐** `~/.claude/.mcp.json`。官方排错白名单写明 Claude 不读该路径；本机曾有 `arthas-mcp` 只存在于 `~/.claude.json` 却能被 `claude mcp list` 列为 User config（该 MCP 已于 2026-09-05 卸载）。
 - **禁止整文件 symlink / 覆盖** `~/.claude.json`：同文件还有 OAuth、项目信任、会话统计。Claude 用同目录 tmp + `rename` 保存，Linux 上会把 symlink 打成普通文件。
 - **不要碰** `~/.claude/settings.json` 的 `*McpjsonServers` / `allowedMcpServers`（那是项目 `.mcp.json` 或企业策略），也不要碰 `projects.<path>.mcpServers`（local scope）和 `projects.<path>.disabledMcpServers`（用户手动开关）。
 - 用户级定义写入后即可启用，不必改门控。
@@ -187,7 +187,7 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 | `codebase-memory-mcp` | 有 | 有 | **缺失** | 有 |
 | `homeassistant` | 有 | 有 | 有 | 有 |
 | `openaiDeveloperDocs` | 仅此 | 无 | 无 | 无 |
-| `arthas-mcp` | 无 | 仅此 | 无 | 无 |
+| `arthas-mcp` | 无 | 仅此（**2026-09-05 已卸载，禁止再同步**） | 无 | 无 |
 
 同一 `homeassistant` URL 在 Codex（`url`、无 type）、Claude/Cursor（`type: http`）、OpenCode（`type: remote` + `enabled`）三种写法。`~/.claude/.mcp.json` 与 `~/.claude.json` 内容不一致且 Claude 只认后者。`opencode.jsonc` 的 `"mcp": {}` 未冲掉 `opencode.json` 里的两条。
 
@@ -213,3 +213,5 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 - Cursor CLI 批准：https://cursor.com/docs/cli/mcp.md
 - Codex：https://developers.openai.com/codex/mcp
 - Pi：https://github.com/nicobailon/pi-mcp-adapter （README 文件布局与优先级）、https://pi.dev/docs/latest/skills 、https://pi.dev/docs/latest/settings
+
+<!-- 该文档整理/压缩于 2026-09-05 -->

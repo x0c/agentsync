@@ -59,14 +59,11 @@ goreleaser check
 
 ## 文档导航
 
-> 以下文档在涉及对应领域的开发、评审或排查时先读取。
-
-- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：命令使用、检查模式、全局收敛、仓库收敛、批量收敛、草稿采纳、`--watch` / systemd；排查 Cursor「规则已同步 / Settings 有但 Agent 看不到」、MCP 被清空、watch 不生效；本地验证、发布入口
-- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：规范文件收敛、Skill 根目录收敛、MCP 空文件/SkipMCP、路径与别名策略、备份与合并、`.gitignore`/`.stignore`、安全边界、AI 易错点（含 Cursor 落盘≠注入）
-- [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某个 agent runtime 的规范入口或 skill 目录、核对某工具的全局规则文件与 skill 目录官方路径、查 Cursor `~/.cursor/rules` 注入存疑点时查阅（市面主流 runtime 全局路径调研，含置信度标注）
-- [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)：实现或调整 MCP 配置同步、核对某工具用户级 MCP 落点与 schema、做跨工具字段转换、判断某 runtime 该 key 级合并还是整文件覆盖前必读
-- [README.md](README.md)：面向公开用户的英文安装与用法说明（含 Cursor 注入 caveat）
-- [README.zh-CN.md](README.zh-CN.md)：面向公开用户的中文安装与用法说明（含 Cursor 注入 caveat）
+- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：改命令行为、检查模式、全局/仓库/批量收敛、草稿采纳、`--watch` / systemd，或排查 Cursor「规则已同步但 Agent 看不到」、MCP 被清空、watch 不生效前**必读**。不读会漏验证入口或误判注入未生效。
+- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：改规范文件/Skill 根目录/MCP（空文件、SkipMCP）、路径与别名、备份与合并、`.gitignore`/`.stignore`、安全边界前**必读**。不读会弄丢备份合并语义或把 Cursor 落盘当成已注入。
+- [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某 runtime 规范入口或 skill 目录、核对官方全局路径、查 Cursor `~/.cursor/rules` 注入存疑前**必读**。不读会写错 Detect/落点。
+- [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)：实现或调整 MCP 同步、核对用户级 MCP 落点与 schema、跨工具字段转换、判断 key 级合并还是整文件覆盖前**必读**。不读会清空热文件或写错 schema。
+- [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md)：改对外安装与用法（含 Cursor 注入 caveat）前**必读**。
 
 ## 领域地图（doc-init）
 

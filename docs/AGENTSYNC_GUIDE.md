@@ -216,3 +216,5 @@ GitHub Actions 的 release 工作流使用 GoReleaser，读取 `.goreleaser.yml`
 - 待补充：发布与安装链路、测试隔离与安全验证可在后续 doc-update/doc-init 续写中拆为独立 Guide。
 
 <!-- 该文档由 doc-init 更新于 2026-06-30；定位：AI 修改 agentsync 命令工作流前的快速参考文档 -->
+
+<!-- 该文档整理/压缩于 2026-09-05 -->

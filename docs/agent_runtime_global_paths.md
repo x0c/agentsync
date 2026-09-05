@@ -125,3 +125,5 @@
 ## 三、调研方法与来源
 - 方法：6 路并行调研（Anthropic/OpenAI 系、开源 CLI、IDE 系、大厂自研、新兴独立、中文社区交叉验证），累计 200+ 次检索，全部关键路径以官方文档原文核实（code.claude.com、developers.openai.com、docs.github.com、opencode.ai、cursor.com、docs.windsurf.com、kiro.dev、codebuddy.ai、docs.qoder.com、kimi.com/code/docs、joycode.jd.com 等）。
 - 各工具逐条来源 URL 见调研底稿：`/mnt/agents/output/research/agent_runtime_wideA.md` ~ `wideF.md`。
+
+<!-- 该文档整理/压缩于 2026-09-05 -->
