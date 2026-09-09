@@ -33,4 +33,3 @@ Shallow clones of the following repositories were read before editing the README
 ## Verification scope
 
 The v0.11.0 Linux amd64 release archive was downloaded and matched against its published SHA-256 checksum. Its binary completed preview, apply, and recheck in an isolated home with distinct Claude/Codex instructions; both instruction texts survived and both aliases resolved to the canonical source. English/Chinese command blocks match, relative README links resolve, and GitHub's Markdown API renders the tables and folded path reference. Existing macOS/Windows releases and the Homebrew cask were inspected; installation on those operating systems was not rerun in this documentation task.
-
