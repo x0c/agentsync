@@ -28,6 +28,9 @@ func syncMCP(cfg Config, opts Options) ([]TargetResult, []string, error) {
 	if sourceResult != nil {
 		results = append(results, *sourceResult)
 	}
+	if shouldRefuseEmptyMCP(cfg, opts, servers) {
+		return results, backups, fmt.Errorf("refusing to apply empty mcp.json while watching: installed tools still have MCP servers")
+	}
 	if opts.Check && !pathExists(cfg.MCPSource) {
 		for _, target := range cfg.MCPTargets {
 			result, _, err := syncMCPTarget(target, nil, opts)
@@ -39,13 +42,11 @@ func syncMCP(cfg Config, opts Options) ([]TargetResult, []string, error) {
 		return results, backups, nil
 	}
 
-	ignoreResult, err := ensureMCPGitignore(filepath.Dir(cfg.MCPSource), opts)
+	ignoreResults, err := ensureSecretIgnores(filepath.Dir(cfg.MCPSource), opts)
 	if err != nil {
 		return results, backups, err
 	}
-	if ignoreResult != nil {
-		results = append(results, *ignoreResult)
-	}
+	results = append(results, ignoreResults...)
 
 	for _, target := range cfg.MCPTargets {
 		result, backup, err := syncMCPTarget(target, servers, opts)
@@ -88,7 +89,7 @@ func ensureMCPSource(cfg Config, opts Options) ([]mcpServer, *TargetResult, erro
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := writeFileAtomic(cfg.MCPSource, appendNewline(data), 0o644); err != nil {
+	if err := writeFileAtomic(cfg.MCPSource, appendNewline(data), 0o600); err != nil {
 		return nil, nil, err
 	}
 	if len(imported) > 0 {
@@ -99,6 +100,7 @@ func ensureMCPSource(cfg Config, opts Options) ([]mcpServer, *TargetResult, erro
 
 func importMCPUnion(targets []MCPTarget) []mcpServer {
 	seen := map[string]mcpServer{}
+	seenLower := map[string]string{}
 	names := make([]string, 0)
 	for _, target := range targets {
 		target = resolveMCPTarget(target)
@@ -116,7 +118,12 @@ func importMCPUnion(targets []MCPTarget) []mcpServer {
 			if _, ok := seen[srv.Name]; ok {
 				continue
 			}
+			lower := strings.ToLower(srv.Name)
+			if _, ok := seenLower[lower]; ok {
+				continue
+			}
 			seen[srv.Name] = srv
+			seenLower[lower] = srv.Name
 			names = append(names, srv.Name)
 		}
 	}
@@ -463,10 +470,11 @@ func appendNewline(data []byte) []byte {
 func mcpNoticeText() string {
 	return mcpNoticeBegin + "\n" +
 		"## MCP 配置\n\n" +
-		"MCP 服务器的唯一源是 `~/.config/agentsync/mcp.json`（与本文件、`skills/` 平级）。" +
+		"MCP 服务器的唯一源是本机 `~/.config/agentsync/mcp.json`（含 token，不进 git / Syncthing；与本文件、`skills/` 平级）。" +
 		"新增、修改或删除 MCP 时只改那份 JSON，不要改各工具自己的 MCP 配置" +
 		"（例如 `~/.claude.json`、`~/.cursor/mcp.json`、`~/.codex/config.toml`）。" +
-		"运行 `agentsync` 后，已安装工具的用户级 MCP 入口会按各自 schema 被覆盖为统一源中的服务器集合。\n" +
+		"运行 `agentsync` 后，已安装工具的用户级 MCP 入口会按各自 schema 被覆盖为统一源中的服务器集合。" +
+		"`agentsync --watch` 只从统一源单向写出；工具 UI 里加的服务器不会自动拉回。\n" +
 		mcpNoticeEnd
 }
 
@@ -517,31 +525,82 @@ func upsertMCPNotice(body string) (string, bool) {
 	return trimmed + "\n\n" + notice + "\n", true
 }
 
-func ensureMCPGitignore(root string, opts Options) (*TargetResult, error) {
-	if root == "" || !pathExists(filepath.Join(root, ".git")) {
+var secretIgnoreLines = []string{"mcp.json", "backups/", "merge-drafts/"}
+
+func shouldRefuseEmptyMCP(cfg Config, opts Options, servers []mcpServer) bool {
+	if !opts.Watch || len(servers) > 0 {
+		return false
+	}
+	return mcpTargetsHaveServers(cfg.MCPTargets)
+}
+
+func mcpTargetsHaveServers(targets []MCPTarget) bool {
+	for _, target := range targets {
+		target = resolveMCPTarget(target)
+		if target.Detect != "" && !pathExists(target.Detect) {
+			continue
+		}
+		servers, err := loadTargetServers(target)
+		if err != nil {
+			continue
+		}
+		if len(servers) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func ensureSecretIgnores(root string, opts Options) ([]TargetResult, error) {
+	if root == "" {
 		return nil, nil
 	}
-	path := filepath.Join(root, ".gitignore")
+	var results []TargetResult
+	if pathExists(filepath.Join(root, ".git")) {
+		result, err := ensureIgnoreFile(filepath.Join(root, ".gitignore"), secretIgnoreLines, opts)
+		if err != nil {
+			return results, err
+		}
+		if result != nil {
+			results = append(results, *result)
+		}
+	}
+	if pathExists(filepath.Join(root, ".stfolder")) {
+		result, err := ensureIgnoreFile(filepath.Join(root, ".stignore"), secretIgnoreLines, opts)
+		if err != nil {
+			return results, err
+		}
+		if result != nil {
+			results = append(results, *result)
+		}
+	}
+	return results, nil
+}
+
+func ensureIgnoreFile(path string, lines []string, opts Options) (*TargetResult, error) {
 	existing := ""
 	if data, err := os.ReadFile(path); err == nil {
 		existing = string(data)
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if gitignoreHasMCP(existing) {
+	missing := missingIgnoreLines(existing, lines)
+	if len(missing) == 0 {
 		return nil, nil
 	}
-	result := TargetResult{Path: path, Status: "created", Detail: "ignore mcp.json"}
+	result := TargetResult{Path: path, Status: "created", Detail: "ignore " + strings.Join(missing, ", ")}
 	if opts.Check {
 		result.Status = "missing"
-		result.Detail = "would ignore mcp.json"
+		result.Detail = "would ignore " + strings.Join(missing, ", ")
 		return &result, nil
 	}
 	next := existing
 	if next != "" && !strings.HasSuffix(next, "\n") {
 		next += "\n"
 	}
-	next += "mcp.json\n"
+	for _, line := range missing {
+		next += line + "\n"
+	}
 	perm := os.FileMode(0o644)
 	if info, err := os.Lstat(path); err == nil {
 		perm = info.Mode().Perm()
@@ -552,16 +611,45 @@ func ensureMCPGitignore(root string, opts Options) (*TargetResult, error) {
 	return &result, nil
 }
 
+func missingIgnoreLines(content string, lines []string) []string {
+	var missing []string
+	for _, line := range lines {
+		if !ignoreHasEntry(content, line) {
+			missing = append(missing, line)
+		}
+	}
+	return missing
+}
+
 func gitignoreHasMCP(content string) bool {
+	return ignoreHasEntry(content, "mcp.json")
+}
+
+func ignoreHasEntry(content, name string) bool {
+	wanted := ignoreAliases(name)
 	for _, line := range strings.Split(content, "\n") {
 		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "#") {
+		if trim == "" || strings.HasPrefix(trim, "#") {
 			continue
 		}
-		switch trim {
-		case "mcp.json", "/mcp.json", "./mcp.json":
-			return true
+		for _, alias := range wanted {
+			if trim == alias {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func ignoreAliases(name string) []string {
+	switch name {
+	case "mcp.json":
+		return []string{"mcp.json", "/mcp.json", "./mcp.json"}
+	case "backups/":
+		return []string{"backups/", "/backups/", "./backups/"}
+	case "merge-drafts/":
+		return []string{"merge-drafts/", "/merge-drafts/", "./merge-drafts/"}
+	default:
+		return []string{name}
+	}
 }

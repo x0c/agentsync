@@ -34,11 +34,13 @@ agentsync 要解决的是各工具 MCP 配置漂移：同一套服务器在不�
 
 - **不能整文件 symlink 混杂配置**（Codex `config.toml`、Claude `~/.claude.json`、OpenCode `opencode.json`、Zed `settings.json` 等）。独立 MCP 文件可以整段替换 `mcpServers`。
 - **允许引入解析库**（TOML / YAML / JSONC）。这是对本仓「仅标准库」约束的例外，实现时同步改根 `AGENTS.md` 技术栈说明。
-- **允许明文密钥**，不要改目标文件权限。统一源常含 token / `private_` URL：**不得提交进本仓或用户配置仓**；用户 `~/.config/agentsync/` 若是 git / Syncthing 目录，实现时必须把 `mcp.json` 写入 ignore。
+- **允许明文密钥**，新建统一源用 `0600`，不要改已有目标文件权限。统一源常含 token / `private_` URL：**不得提交进本仓或用户配置仓，也不要默认同步到其他机器**；用户 `~/.config/agentsync/` 若是 git / Syncthing 目录，必须把 `mcp.json`、`backups/`、`merge-drafts/` 写入 `.gitignore` / `.stignore`。
 - **超时字段跨 runtime 默认丢弃**，不做隐式毫秒/秒换算。
 - **不代做本机批准名单**（Cursor `agent mcp enable`、项目级信任对话框、企业 allowlist）。
+- **并集导入大小写不敏感**：`Mobbin` 与 `mobbin` 视为同一服务器，先到先得保留先看到的名字。
+- **Codex 捆绑本机服务器不扩散**：`node_repl` / `computer-use`（`SkyComputerUseClient`、`NODE_REPL_*`）只写回 Codex；其他工具不写这些条目，避免启动失败。统一源仍保留它们，以便 Codex 往返。
 - **心流 iFlow 的 MCP 首发不做**（已于 2026-04-17 关停并引导 Qoder）。规范/Skill 入口若目录仍在，维持现有 Detect 跳过即可。
-- **`~/.agents` 无 MCP 概念**，不要为它造入口。
+- **`~/.agents` 无 MCP 入口**，不要为它造入口（pi-mcp-adapter 也读 `~/.agents/mcp.json`，但那会让所有装了 adapter 的工具共享同一文件，跨机行为不可控；Pi 的 MCP 落点用 `~/.config/mcp/mcp.json`）。
 
 ```mermaid
 flowchart LR
@@ -79,6 +81,8 @@ flowchart LR
 | Junie | `~/.junie` | `~/.junie/mcp/mcp.json` | file | `mcpServers`；不要写旧路径 `~/.junie/mcp.json` | 做 |
 | Kiro | `~/.kiro` | `~/.kiro/settings/mcp.json` | file | `mcpServers` | 做 |
 | JoyCode | `~/.joycode` | `~/.joycode/joycode-mcp.json` | file | `mcpServers`；**禁止为 MCP 创建** `~/.joycode`（会挡住旧目录迁移） | 做 |
+| Pi | `~/.pi/agent` | `~/.config/mcp/mcp.json` | file | `mcpServers`（标准共享全局配置，见下方 Pi 小节） | 做 |
+| Pi | `~/.pi/agent` | `~/.config/mcp/mcp.json` | file | `mcpServers`（pi-mcp-adapter 扩展读共享全局配置，优先级最高） | 做 |
 
 Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\settings.json`；Crush `%LOCALAPPDATA%\crush\crush.json`；Goose `%APPDATA%\Block\goose\config\config.yaml`；Zed `%APPDATA%\Zed\settings.json`。
 
@@ -87,7 +91,7 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 ### Claude Code（最高风险热文件）
 
 - **只改** `~/.claude.json` 顶层 `mcpServers`。`claude mcp add --scope user` 写的就是这里。
-- **不要读、不要写、不要对齐** `~/.claude/.mcp.json`。官方排错白名单写明 Claude 不读该路径；本机 `arthas-mcp` 只存在于 `~/.claude.json` 却能被 `claude mcp list` 列为 User config。
+- **不要读、不要写、不要对齐** `~/.claude/.mcp.json`。官方排错白名单写明 Claude 不读该路径；本机曾有 `arthas-mcp` 只存在于 `~/.claude.json` 却能被 `claude mcp list` 列为 User config（该 MCP 已于 2026-09-05 卸载）。
 - **禁止整文件 symlink / 覆盖** `~/.claude.json`：同文件还有 OAuth、项目信任、会话统计。Claude 用同目录 tmp + `rename` 保存，Linux 上会把 symlink 打成普通文件。
 - **不要碰** `~/.claude/settings.json` 的 `*McpjsonServers` / `allowedMcpServers`（那是项目 `.mcp.json` 或企业策略），也不要碰 `projects.<path>.mcpServers`（local scope）和 `projects.<path>.disabledMcpServers`（用户手动开关）。
 - 用户级定义写入后即可启用，不必改门控。
@@ -119,8 +123,17 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 - 旧路径 `~/.joycoder/joycoder-mcp.json` 仅在「还没有 `.joycode`」时由扩展自己迁移。agentsync **不得先建空** `~/.joycode`。
 - 官方 MCP 教程页仍只写 UI；官方案例页 `~/.josycoder/joycoder-mcp.json` 是拼写错误 + 旧文件名，不可采信。
 
+### Pi（earendil-works/pi）
+
+- pi **无内置 MCP**；官方生态用 `pi-mcp-adapter` 扩展（`pi install npm:pi-mcp-adapter`）接入，写共享标准文件，不写各家宿主配置。
+- adapter 自动读取的优先级：`~/.config/mcp/mcp.json` > `~/.agents/mcp.json` > `~/.agents/mcp/mcp.json` > `~/.pi/agent/mcp.json`（Pi 全局覆盖）> 项目 `.mcp.json` > `.pi/mcp.json`。
+- agentsync 写 `~/.config/mcp/mcp.json`（cursor 方言）：优先级最高、adapter 承诺绝不回写该共享文件，与 agentsync 整文件覆盖不互踩。`~/.pi/agent/mcp.json` 是 adapter/`/mcp setup` 的写入口（存 adapter 专属设置与导入），agentsync 不碰。
+- Detect 用 `~/.pi/agent`（pi 首次运行创建）；不用 `~/.pi`，避免只建过空目录的机器误判已安装。
+- skills 不加 pi 条目：pi 原生扫描 `~/.agents/skills/`（agentsync 已同步），再加 `~/.pi/agent/skills` 会双份同名冲突。
+
 ### 其余一次性钉死项
 
+- **Pi（earendil-works/pi，2026-08-16）**：无内置 MCP，靠 `pi-mcp-adapter` 扩展（`pi install npm:pi-mcp-adapter`）。adapter 自动读取顺序：`~/.config/mcp/mcp.json`（共享全局，优先级最高）→ `~/.agents/mcp.json` → `~/.agents/mcp/mcp.json` → `~/.pi/agent/mcp.json`（Pi 专属覆盖）→ 项目级。agentsync 写**共享全局** `~/.config/mcp/mcp.json`（cursor 方言、整段覆盖）：adapter 承诺只写自有覆盖文件、绝不回写共享文件，无互踩。**不要**写 `~/.pi/agent/mcp.json`（那是 `/mcp setup` 导入与 adapter 设置的写入口，整段覆盖会清掉用户导入）。Detect 用 `~/.pi/agent`（pi 首次运行即建，比 `~/.pi` 更准）。skills 不加 pi 条目：pi 原生扫 `~/.agents/skills/`（已收敛），再加 `~/.pi/agent/skills` 会同名重复告警。
 - **Kimi**：只写 `~/.kimi-code/mcp.json`。`config.toml` 的 `[mcp]` 只有超时默认值。`kimi migrate` 才读旧 `~/.kimi/mcp.json`，运行时不读。0.31.x 没有 `kimi mcp` 子命令。
 - **Junie**：只写 `~/.junie/mcp/mcp.json`。2025 博客的 `~/.junie/mcp.json` 过期。
 - **Qoder**：只合并 `~/.qoder/settings.json` 的 `mcpServers`。不要创建 `~/.qoder/mcp.json`。
@@ -134,7 +147,7 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 
 | 目标 | type:stdio | type:http | command/args | env | url | 开关 | timeout |
 |---|---|---|---|---|---|---|---|
-| Cursor / Copilot / Factory / Kimi / Kiro / JoyCode / Claude | 可留 `stdio` 或省略 | `http`（Cursor **禁止** `streamable-http`，否则 CLI 可能整份丢弃） | 原样 | `env` | `url` | 条目级开关 DROP（侧通道不碰） | DROP |
+| Cursor / Copilot / Factory / Kimi / Kiro / JoyCode / Claude / Pi | 可留 `stdio` 或省略 | `http`（Cursor **禁止** `streamable-http`，否则 CLI 可能整份丢弃） | 原样 | `env` | `url` | 条目级开关 DROP（侧通道不碰） | DROP |
 | Windsurf | DROP type | DROP type | 原样 | `env` | **`serverUrl`**（读入时 `url`/`serverUrl` 都认，不要两个都写） | DROP | DROP |
 | Codex | 无 type 字段 | 只写 `url` | `command`/`args` | `env` | `url`；headers → `http_headers` | `enabled` | DROP（单位是秒，且拆 startup/tool） |
 | OpenCode 1.18 / Kilo | `local` | `remote` | **`command: [cmd, ...args]`** | **`environment`** | `url` | `enabled: true` | DROP（毫秒） |
@@ -174,7 +187,7 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 | `codebase-memory-mcp` | 有 | 有 | **缺失** | 有 |
 | `homeassistant` | 有 | 有 | 有 | 有 |
 | `openaiDeveloperDocs` | 仅此 | 无 | 无 | 无 |
-| `arthas-mcp` | 无 | 仅此 | 无 | 无 |
+| `arthas-mcp` | 无 | 仅此（**2026-09-05 已卸载，禁止再同步**） | 无 | 无 |
 
 同一 `homeassistant` URL 在 Codex（`url`、无 type）、Claude/Cursor（`type: http`）、OpenCode（`type: remote` + `enabled`）三种写法。`~/.claude/.mcp.json` 与 `~/.claude.json` 内容不一致且 Claude 只认后者。`opencode.jsonc` 的 `"mcp": {}` 未冲掉 `opencode.json` 里的两条。
 
@@ -199,3 +212,6 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 - Crush：charmbracelet/crush `internal/shell/expand.go`、`internal/config/config.go`
 - Cursor CLI 批准：https://cursor.com/docs/cli/mcp.md
 - Codex：https://developers.openai.com/codex/mcp
+- Pi：https://github.com/nicobailon/pi-mcp-adapter （README 文件布局与优先级）、https://pi.dev/docs/latest/skills 、https://pi.dev/docs/latest/settings
+
+<!-- 该文档整理/压缩于 2026-09-05 -->
