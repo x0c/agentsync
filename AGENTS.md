@@ -43,6 +43,7 @@ goreleaser check
 
 > 以下文档在涉及对应领域的开发、评审或排查时先读取。
 
+- [docs/GITHUB_DISCOVERY_GUIDE.md](docs/GITHUB_DISCOVERY_GUIDE.md): **must read** before changing or reviewing GitHub discovery, About, topics, README positioning, or star-growth measurements; skipping it risks confusing automated clones with adoption or overstating platform support.
 - [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：命令使用、检查模式、全局收敛、仓库收敛、批量收敛、草稿采纳；排查 Cursor「规则已同步 / Settings 有但 Agent 看不到」；本地验证、发布入口
 - [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：规范文件收敛、Skill 根目录收敛、路径与别名策略、备份与合并、安全边界、AI 易错点（含 Cursor 落盘≠注入）
 - [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某个 agent runtime 的规范入口或 skill 目录、核对某工具的全局规则文件与 skill 目录官方路径、查 Cursor `~/.cursor/rules` 注入存疑点时查阅（市面主流 runtime 全局路径调研，含置信度标注）
