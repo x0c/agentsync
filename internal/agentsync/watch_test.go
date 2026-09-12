@@ -33,8 +33,9 @@ func TestWatchCannotCombineWithOtherModes(t *testing.T) {
 func TestWatchSnapshotChangesWithMCPSource(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{
-		Source:    filepath.Join(dir, "AGENTS.md"),
-		MCPSource: filepath.Join(dir, "mcp.json"),
+		Source:     filepath.Join(dir, "AGENTS.md"),
+		MCPSource:  filepath.Join(dir, "mcp.json"),
+		PolicyPath: filepath.Join(dir, "sync-policy.json"),
 	}
 	if err := os.WriteFile(cfg.Source, []byte("rules\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -55,6 +56,19 @@ func TestWatchSnapshotChangesWithMCPSource(t *testing.T) {
 	}
 	if before.Agents != after.Agents {
 		t.Fatal("Agents fingerprint should stay put when only mcp.json appears")
+	}
+	if before.Policy != after.Policy {
+		t.Fatal("Policy fingerprint should stay put when only mcp.json appears")
+	}
+	if err := os.WriteFile(cfg.PolicyPath, []byte(`{"mcp":{"default":"allow"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	withPolicy, err := watchSnapshotOf(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Policy == withPolicy.Policy {
+		t.Fatal("Policy fingerprint should change when sync-policy.json appears")
 	}
 }
 
@@ -89,14 +103,18 @@ func TestWatchSnapshotChangesWhenRuntimeAppears(t *testing.T) {
 }
 
 func TestWatchSkipMCPWhenOnlyAgentsChange(t *testing.T) {
-	prev := watchSnapshot{Agents: "a", MCP: "m", Skills: "s", Detect: "d"}
-	next := watchSnapshot{Agents: "a2", MCP: "m", Skills: "s2", Detect: "d"}
+	prev := watchSnapshot{Agents: "a", MCP: "m", Skills: "s", Policy: "p", Detect: "d"}
+	next := watchSnapshot{Agents: "a2", MCP: "m", Skills: "s2", Policy: "p", Detect: "d"}
 	if !watchSkipMCP(prev, next) {
 		t.Fatal("rules/skills-only change should skip MCP")
 	}
 	next.MCP = "m2"
 	if watchSkipMCP(prev, next) {
 		t.Fatal("mcp.json change must sync MCP")
+	}
+	next = watchSnapshot{Agents: "a", MCP: "m", Skills: "s", Policy: "p2", Detect: "d"}
+	if watchSkipMCP(prev, next) {
+		t.Fatal("sync-policy.json change must sync MCP")
 	}
 }
 

@@ -136,8 +136,8 @@ func TestSkillSyncImportsAndLinksRoot(t *testing.T) {
 		Targets:     []Target{{Path: filepath.Join(dir, "codex", "AGENTS.md"), Mode: "link"}},
 		SkillSource: filepath.Join(dir, "agentsync", "skills"),
 		SkillTargets: []SkillTarget{
-			{Path: filepath.Join(dir, "claude", "skills")},
-			{Path: filepath.Join(dir, "codex", "skills")},
+			{Name: "claude", Path: filepath.Join(dir, "claude", "skills")},
+			{Name: "codex", Path: filepath.Join(dir, "codex", "skills")},
 		},
 	}
 	if err := os.MkdirAll(filepath.Join(cfg.SkillTargets[0].Path, "demo"), 0o755); err != nil {
@@ -171,6 +171,80 @@ func TestSkillSyncImportsAndLinksRoot(t *testing.T) {
 	for _, result := range report.SkillResults {
 		if result.Status != "ok" {
 			t.Fatalf("second run should be idempotent, got %+v", report.SkillResults)
+		}
+	}
+}
+
+func TestSkillSyncRespectsDenyPolicy(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	codexDetect := filepath.Join(dir, "codex")
+	claudeDetect := filepath.Join(dir, "claude")
+	if err := os.MkdirAll(codexDetect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(claudeDetect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillSource := filepath.Join(dir, "agentsync", "skills")
+	for _, name := range []string{"keep-me", "drop-me"} {
+		path := filepath.Join(skillSource, name)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(path, "SKILL.md"), []byte("# "+name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	policyPath := filepath.Join(dir, "sync-policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{
+  "skills": {
+    "default": "allow",
+    "targets": {
+      "codex": {"deny": ["drop-me"]}
+    }
+  }
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:      filepath.Join(dir, "AGENTS.md"),
+		Targets:     []Target{{Path: filepath.Join(codexDetect, "AGENTS.md"), Mode: "link", Detect: codexDetect}},
+		SkillSource: skillSource,
+		PolicyPath:  policyPath,
+		SkillTargets: []SkillTarget{
+			{Name: "codex", Path: filepath.Join(codexDetect, "skills"), Detect: codexDetect},
+			{Name: "claude", Path: filepath.Join(claudeDetect, "skills"), Detect: claudeDetect},
+		},
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	codexSkills := cfg.SkillTargets[0].Path
+	if symlinkPointsTo(codexSkills, skillSource) {
+		t.Fatalf("filtered codex skills must not be a root symlink; report=%+v", report)
+	}
+	if pathExists(filepath.Join(codexSkills, "drop-me")) {
+		t.Fatal("codex should not expose denied skill")
+	}
+	if !symlinkPointsTo(filepath.Join(codexSkills, "keep-me"), filepath.Join(skillSource, "keep-me")) {
+		t.Fatal("codex should link allowed skill into canonical source")
+	}
+	if !symlinkPointsTo(cfg.SkillTargets[1].Path, skillSource) {
+		t.Fatal("unfiltered claude should keep root skill symlink")
+	}
+	if !pathExists(filepath.Join(skillSource, "drop-me", "SKILL.md")) {
+		t.Fatal("canonical source must keep denied skill")
+	}
+	report, err = syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range report.SkillResults {
+		if result.Path == codexSkills && result.Status != "ok" {
+			t.Fatalf("filtered skill root should be idempotent, got %+v", result)
 		}
 	}
 }
@@ -381,6 +455,32 @@ func TestDefaultGlobalConfigIncludesCursor(t *testing.T) {
 	}
 	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".cursor", "skills")) {
 		t.Fatalf("Cursor Skill 入口缺失: %+v", cfg.SkillTargets)
+	}
+}
+
+func TestDefaultGlobalConfigIncludesPolicyAndSkillNames(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	if !strings.HasSuffix(cfg.PolicyPath, filepath.Join("agentsync", "sync-policy.json")) {
+		t.Fatalf("PolicyPath missing: %q", cfg.PolicyPath)
+	}
+	foundCodex := false
+	foundAgents := false
+	for _, tgt := range cfg.SkillTargets {
+		if tgt.Name == "" {
+			t.Fatalf("SkillTarget missing Name: %+v", tgt)
+		}
+		if tgt.Name == "codex" {
+			foundCodex = true
+		}
+		if tgt.Name == "agents" {
+			foundAgents = true
+		}
+	}
+	if !foundCodex || !foundAgents {
+		t.Fatalf("expected codex and agents skill names, got %+v", cfg.SkillTargets)
 	}
 }
 

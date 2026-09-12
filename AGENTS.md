@@ -25,8 +25,9 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 - 全局规范源：`~/.config/agentsync/AGENTS.md`
 - 全局 Skill 源：`~/.config/agentsync/skills/`
 - 全局 MCP 源：`~/.config/agentsync/mcp.json`（本机文件，常含 token，不进 git / Syncthing；按已安装 runtime 翻译后写入各自用户级 MCP 入口；不整文件 symlink 混杂热文件）
+- 同步策略：`~/.config/agentsync/sync-policy.json`（可选；按 runtime Name deny/白名单 MCP 与 Skill；统一源仍是全集；不含 token，可跨机）
 - 全局工具入口：覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Pi、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 各自的用户级规范文件，外加通用 `~/.agents/AGENTS.md`。完整清单与各自路径见 `internal/agentsync/paths.go` 的 `defaultGlobalConfig()`。Cursor 使用 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`，带 `alwaysApply` frontmatter 的受管副本，不是裸 symlink）。Pi 用 `~/.pi/agent/AGENTS.md`，其 Skill 走 pi 原生扫描的 `~/.agents/skills/`，不建专属别名。
-- 全局 Skill 入口：上述工具各自的用户级 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.cursor/skills`、`~/.joycode/skills` 等），外加通用 `~/.agents/skills`。
+- 全局 Skill 入口：上述工具各自的用户级 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.cursor/skills`、`~/.joycode/skills` 等），外加通用 `~/.agents/skills`。无策略过滤时整目录别名到统一源；有过滤时物化为允许 skill 的子软链。
 - **按安装门控**：每个入口都带一个 `Detect` 标志目录（该工具的用户级主目录，如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，同步时报告 `skipped`，绝不为未安装的工具创建任何目录或入口文件。新增 runtime 时必须同时给出正确的 `Detect`。MCP 入口同样按 Detect 门控；iFlow 的 MCP 不同步，`~/.agents` 无 MCP 入口。
 - 项目级入口：仓库内 `AGENTS.md` 与 `CLAUDE.md`
 
@@ -36,7 +37,7 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 - 单 binary CLI，入口为 `main.go`，核心实现位于 `internal/agentsync/`。
 - CLI 输出、错误信息和新增注释按本地规范使用中文；已有英文用户输出属于当前公开接口，改动前需要同步评估 README 与测试。
 - 默认优先创建 symlink；Windows 或不支持 symlink 的场景会退化为 hardlink 或受管副本。
-- 修改默认路径、别名策略、备份策略、Skill 同步策略、MCP 同步策略或命令参数时，必须同步更新本文档、`README.md`、`README.zh-CN.md` 和 `docs/` 对应文档。
+- 修改默认路径、别名策略、备份策略、Skill 同步策略、MCP 同步策略、`sync-policy.json` 语义或命令参数时，必须同步更新本文档、`README.md`、`README.zh-CN.md` 和 `docs/` 对应文档。
 - 测试必须使用隔离配置目录，避免向真实 `~/.config/agentsync/backups/` 写测试备份。
 
 ## 验证命令
@@ -61,7 +62,7 @@ goreleaser check
 
 - [docs/GITHUB_DISCOVERY_GUIDE.md](docs/GITHUB_DISCOVERY_GUIDE.md): **must read** before changing or reviewing GitHub discovery, About, topics, README positioning, or star-growth measurements; skipping it risks confusing automated clones with adoption or overstating platform support.
 - [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：改命令行为、检查模式、全局/仓库/批量收敛、草稿采纳、`--watch` / systemd，或排查 Cursor「规则已同步但 Agent 看不到」、MCP 被清空、watch 不生效前**必读**。不读会漏验证入口或误判注入未生效。
-- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：改规范文件/Skill 根目录/MCP（空文件、SkipMCP）、路径与别名、备份与合并、`.gitignore`/`.stignore`、安全边界前**必读**。不读会弄丢备份合并语义或把 Cursor 落盘当成已注入。
+- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：改规范文件/Skill 根目录/MCP（空文件、SkipMCP、`sync-policy.json`）、路径与别名、备份与合并、`.gitignore`/`.stignore`、安全边界前**必读**。不读会弄丢备份合并语义、过滤写出语义或把 Cursor 落盘当成已注入。
 - [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某 runtime 规范入口或 skill 目录、核对官方全局路径、查 Cursor `~/.cursor/rules` 注入存疑前**必读**。不读会写错 Detect/落点。
 - [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)：实现或调整 MCP 同步、核对用户级 MCP 落点与 schema、跨工具字段转换、判断 key 级合并还是整文件覆盖前**必读**。不读会清空热文件或写错 schema。
 - [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md)：改对外安装与用法（含 Cursor 注入 caveat）前**必读**。
@@ -74,8 +75,8 @@ goreleaser check
 |------|---------|
 | 命令调度与运行模式 | main.go；internal/agentsync/run.go；internal/agentsync/watch.go |
 | 规范文件收敛 | internal/agentsync/run.go；internal/agentsync/merge.go |
-| Skill 根目录收敛 | internal/agentsync/skills.go |
-| MCP 配置收敛 | internal/agentsync/mcp.go；internal/agentsync/mcp_render.go；internal/agentsync/mcp_apply.go |
+| Skill 根目录收敛 | internal/agentsync/skills.go；internal/agentsync/policy.go |
+| MCP 配置收敛 | internal/agentsync/mcp.go；internal/agentsync/mcp_render.go；internal/agentsync/mcp_apply.go；internal/agentsync/policy.go |
 | 路径、别名与备份策略 | internal/agentsync/paths.go；internal/agentsync/files.go |
 
 ## 待补充知识库（doc-init backlog）
@@ -86,7 +87,7 @@ goreleaser check
 ## 改动注意事项
 
 - 改 `--check`、`--repo`、`--all`、`--adopt`、`--force`、`--watch` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。`SkipMCP` 只给 `--watch` 内部用，不要加成 CLI flag。不要加 `agentsync service install`：只维护 `contrib/systemd/` 与 `contrib/launchd/` 模板。
-- 改统一源、目标入口、备份、合并、别名降级或 Skill 根目录替换时，先读 [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
-- 实现或改 MCP 同步（统一源、Detect、写入目标、schema 转换、热文件合并）时，先读 [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)；路径表或转换规则变了必须同步该文档。
+- 改统一源、目标入口、备份、合并、别名降级、Skill 根目录替换或 `sync-policy.json` 过滤时，先读 [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
+- 实现或改 MCP 同步（统一源、Detect、写入目标、schema 转换、热文件合并、按工具策略过滤）时，先读 [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)；路径表或转换规则变了必须同步该文档。
 - `CLAUDE.md` 必须保持单行 `@AGENTS.md`，不要在其中写项目规则。
 - `.doc-init-*.json` 是 doc-init 扫描产物；若需要重新初始化可复用或重跑，但普通功能改动不依赖它们。

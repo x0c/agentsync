@@ -21,6 +21,12 @@ func syncMCP(cfg Config, opts Options) ([]TargetResult, []string, error) {
 	var results []TargetResult
 	var backups []string
 
+	policy, err := loadSyncPolicy(cfg.PolicyPath)
+	if err != nil {
+		return results, backups, err
+	}
+	results = append(results, policyWarningResults(cfg.PolicyPath, policy, cfg.MCPTargets, nil)...)
+
 	servers, sourceResult, err := ensureMCPSource(cfg, opts)
 	if err != nil {
 		return results, backups, err
@@ -33,7 +39,7 @@ func syncMCP(cfg Config, opts Options) ([]TargetResult, []string, error) {
 	}
 	if opts.Check && !pathExists(cfg.MCPSource) {
 		for _, target := range cfg.MCPTargets {
-			result, _, err := syncMCPTarget(target, nil, opts)
+			result, _, err := syncMCPTarget(target, nil, opts, nil)
 			if err != nil {
 				return results, backups, err
 			}
@@ -49,7 +55,8 @@ func syncMCP(cfg Config, opts Options) ([]TargetResult, []string, error) {
 	results = append(results, ignoreResults...)
 
 	for _, target := range cfg.MCPTargets {
-		result, backup, err := syncMCPTarget(target, servers, opts)
+		filtered, dropped := filterServersForPolicy(servers, policy.MCP, target.Name)
+		result, backup, err := syncMCPTarget(target, filtered, opts, dropped)
 		if err != nil {
 			return results, backups, err
 		}
@@ -134,7 +141,7 @@ func importMCPUnion(targets []MCPTarget) []mcpServer {
 	return out
 }
 
-func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options) (TargetResult, string, error) {
+func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropped []string) (TargetResult, string, error) {
 	target = resolveMCPTarget(target)
 	result := TargetResult{Path: target.Path}
 	if target.Detect != "" && !pathExists(target.Detect) {
@@ -145,11 +152,11 @@ func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options) (TargetR
 	if servers == nil && opts.Check {
 		if pathExists(target.Path) {
 			result.Status = "replaceable"
-			result.Detail = "would sync mcp config after creating canonical source"
+			result.Detail = formatFilteredDetail("would sync mcp config after creating canonical source", dropped)
 			return result, "", nil
 		}
 		result.Status = "missing"
-		result.Detail = "would create mcp config"
+		result.Detail = formatFilteredDetail("would create mcp config", dropped)
 		return result, "", nil
 	}
 
@@ -186,21 +193,22 @@ func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options) (TargetR
 	matched := extractErr == nil && sameMCPServers(existingServers, nextServers) && !jsoncOverlay
 	if matched && pathExists(target.Path) {
 		result.Status = "ok"
-		result.Detail = "mcp config"
+		result.Detail = formatFilteredDetail("mcp config", dropped)
 		return result, "", nil
 	}
 
 	if opts.Check {
 		if pathExists(target.Path) {
 			result.Status = "replaceable"
-			result.Detail = "would update mcp config"
+			detail := "would update mcp config"
 			if jsoncOverlay {
-				result.Detail = "would update mcp config and clear opencode.jsonc mcp overlay"
+				detail = "would update mcp config and clear opencode.jsonc mcp overlay"
 			}
+			result.Detail = formatFilteredDetail(detail, dropped)
 			return result, "", nil
 		}
 		result.Status = "missing"
-		result.Detail = "would create mcp config"
+		result.Detail = formatFilteredDetail("would create mcp config", dropped)
 		return result, "", nil
 	}
 
@@ -211,10 +219,10 @@ func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options) (TargetR
 			return result, "", err
 		}
 		result.Status = "replaced"
-		result.Detail = "mcp config"
+		result.Detail = formatFilteredDetail("mcp config", dropped)
 	} else {
 		result.Status = "created"
-		result.Detail = "mcp config"
+		result.Detail = formatFilteredDetail("mcp config", dropped)
 	}
 	perm := os.FileMode(0o644)
 	if existingMode != 0 {
@@ -233,7 +241,7 @@ func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options) (TargetR
 				backup = jsoncBackup
 			}
 		}
-		result.Detail = "mcp config; cleared opencode.jsonc mcp overlay"
+		result.Detail = formatFilteredDetail("mcp config; cleared opencode.jsonc mcp overlay", dropped)
 	}
 	return result, backup, nil
 }
@@ -474,6 +482,7 @@ func mcpNoticeText() string {
 		"新增、修改或删除 MCP 时只改那份 JSON，不要改各工具自己的 MCP 配置" +
 		"（例如 `~/.claude.json`、`~/.cursor/mcp.json`、`~/.codex/config.toml`）。" +
 		"运行 `agentsync` 后，已安装工具的用户级 MCP 入口会按各自 schema 被覆盖为统一源中的服务器集合。" +
+		"按工具裁剪（例如某个 Agent 不要某个服务器）写在同目录的 `sync-policy.json`，不要改各工具自己的 MCP 文件。" +
 		"`agentsync --watch` 只从统一源单向写出；工具 UI 里加的服务器不会自动拉回。\n" +
 		mcpNoticeEnd
 }

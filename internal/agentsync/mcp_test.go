@@ -1019,6 +1019,152 @@ func TestUpsertMCPNoticeIdempotent(t *testing.T) {
 	if !strings.Contains(twice, mcpNoticeBegin) || !strings.Contains(twice, "mcp.json") {
 		t.Fatalf("notice missing: %q", twice)
 	}
+	if !strings.Contains(twice, "sync-policy.json") {
+		t.Fatalf("notice should mention sync-policy.json: %q", twice)
+	}
+}
+
+func TestSyncMCPRespectsDenyPolicy(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	codexDir := filepath.Join(dir, "codex")
+	cursorDir := filepath.Join(dir, "cursor")
+	if err := os.MkdirAll(codexDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(cursorDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp.json"), []byte(`{
+  "mcpServers": {
+    "tavily": {"type": "stdio", "command": "tavily"},
+    "memory": {"type": "stdio", "command": "memory"}
+  }
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	policyPath := filepath.Join(dir, "sync-policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{
+  "version": 1,
+  "mcp": {
+    "default": "allow",
+    "targets": {
+      "codex": {"deny": ["tavily"]}
+    }
+  }
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:     filepath.Join(dir, "AGENTS.md"),
+		MCPSource:  filepath.Join(dir, "mcp.json"),
+		PolicyPath: policyPath,
+		MCPTargets: []MCPTarget{
+			{
+				Name:    "codex",
+				Path:    filepath.Join(codexDir, "config.toml"),
+				Detect:  codexDir,
+				Dialect: "codex",
+				Format:  "toml",
+				Mode:    "key",
+			},
+			{
+				Name:    "cursor",
+				Path:    filepath.Join(cursorDir, "mcp.json"),
+				Detect:  cursorDir,
+				Dialect: "cursor",
+				Format:  "json",
+				Mode:    "file",
+			},
+		},
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	var codexDetail string
+	for _, r := range report.MCPResults {
+		if strings.Contains(r.Path, "config.toml") {
+			codexDetail = r.Detail
+		}
+	}
+	if !strings.Contains(codexDetail, "tavily") {
+		t.Fatalf("codex detail should mention filtered tavily: %q", codexDetail)
+	}
+	codexRaw, err := os.ReadFile(filepath.Join(codexDir, "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(codexRaw), "tavily") {
+		t.Fatalf("codex should not receive tavily: %s", codexRaw)
+	}
+	if !strings.Contains(string(codexRaw), "memory") {
+		t.Fatalf("codex should still receive memory: %s", codexRaw)
+	}
+	cursorServers, err := parseCanonicalFile(filepath.Join(cursorDir, "mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandOf(cursorServers, "tavily") != "tavily" {
+		t.Fatalf("cursor should keep tavily: %+v", cursorServers)
+	}
+	source, err := parseCanonicalFile(cfg.MCPSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if commandOf(source, "tavily") != "tavily" {
+		t.Fatalf("canonical source must remain full: %+v", source)
+	}
+}
+
+func TestSyncMCPWarnsUnknownPolicyTarget(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	detect := filepath.Join(dir, "cursor")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mcp.json"), []byte(`{"mcpServers":{"demo":{"type":"stdio","command":"demo"}}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	policyPath := filepath.Join(dir, "sync-policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{"mcp":{"targets":{"not-a-runtime":{"deny":["demo"]}}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:     filepath.Join(dir, "AGENTS.md"),
+		MCPSource:  filepath.Join(dir, "mcp.json"),
+		PolicyPath: policyPath,
+		MCPTargets: []MCPTarget{{
+			Name:    "cursor",
+			Path:    filepath.Join(detect, "mcp.json"),
+			Detect:  detect,
+			Dialect: "cursor",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range report.MCPResults {
+		if r.Status == "warning" && strings.Contains(r.Detail, "not-a-runtime") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected unknown target warning, got %+v", report.MCPResults)
+	}
 }
 
 func TestRenderMCPDialects(t *testing.T) {

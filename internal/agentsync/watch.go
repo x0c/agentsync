@@ -25,6 +25,7 @@ type watchSnapshot struct {
 	Agents string
 	MCP    string
 	Skills string
+	Policy string
 	Detect string
 }
 
@@ -33,7 +34,7 @@ func (a watchSnapshot) equal(b watchSnapshot) bool {
 }
 
 func watchSkipMCP(prev, next watchSnapshot) bool {
-	return prev.MCP == next.MCP && prev.Detect == next.Detect
+	return prev.MCP == next.MCP && prev.Detect == next.Detect && prev.Policy == next.Policy
 }
 
 func runWatch(opts Options) error {
@@ -171,6 +172,10 @@ func watchSnapshotOf(cfg Config) (watchSnapshot, error) {
 		return watchSnapshot{}, err
 	}
 	snap.Skills, err = skillsFingerprint(cfg.SkillSource)
+	if err != nil {
+		return watchSnapshot{}, err
+	}
+	snap.Policy, err = pathFingerprint(cfg.PolicyPath)
 	if err != nil {
 		return watchSnapshot{}, err
 	}

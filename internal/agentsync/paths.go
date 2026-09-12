@@ -51,29 +51,29 @@ func defaultGlobalConfig() (Config, error) {
 	}
 	skillTargets := []SkillTarget{
 		// 头部 CLI Agent
-		{Path: "~/.claude/skills", Detect: "~/.claude"},
-		{Path: "~/.codex/skills", Detect: "~/.codex"},
-		{Path: "~/.config/opencode/skills", Detect: "~/.config/opencode"},
-		{Path: "~/.qwen/skills", Detect: "~/.qwen"},
-		{Path: "~/.copilot/skills", Detect: "~/.copilot"},
-		{Path: "~/.kimi-code/skills", Detect: "~/.kimi-code"},
+		{Name: "claude", Path: "~/.claude/skills", Detect: "~/.claude"},
+		{Name: "codex", Path: "~/.codex/skills", Detect: "~/.codex"},
+		{Name: "opencode", Path: "~/.config/opencode/skills", Detect: "~/.config/opencode"},
+		{Name: "qwen", Path: "~/.qwen/skills", Detect: "~/.qwen"},
+		{Name: "copilot", Path: "~/.copilot/skills", Detect: "~/.copilot"},
+		{Name: "kimi-code", Path: "~/.kimi-code/skills", Detect: "~/.kimi-code"},
 		// 开源 / 独立 CLI Agent
-		{Path: "~/.grok/skills", Detect: "~/.grok"},
-		{Path: "~/.config/amp/skills", Detect: "~/.config/amp"},
-		{Path: "~/.config/crush/skills", Detect: "~/.config/crush"},
-		{Path: "~/.factory/skills", Detect: "~/.factory"},
-		{Path: "~/.iflow/skills", Detect: "~/.iflow"},
-		{Path: "~/.aider-desk/skills", Detect: "~/.aider-desk"},
+		{Name: "grok", Path: "~/.grok/skills", Detect: "~/.grok"},
+		{Name: "amp", Path: "~/.config/amp/skills", Detect: "~/.config/amp"},
+		{Name: "crush", Path: "~/.config/crush/skills", Detect: "~/.config/crush"},
+		{Name: "factory", Path: "~/.factory/skills", Detect: "~/.factory"},
+		{Name: "iflow", Path: "~/.iflow/skills", Detect: "~/.iflow"},
+		{Name: "aider-desk", Path: "~/.aider-desk/skills", Detect: "~/.aider-desk"},
 		// IDE / 编辑器系 Agent
-		{Path: "~/.cursor/skills", Detect: "~/.cursor"},
-		{Path: "~/.codeium/windsurf/skills", Detect: "~/.codeium/windsurf"},
+		{Name: "cursor", Path: "~/.cursor/skills", Detect: "~/.cursor"},
+		{Name: "windsurf", Path: "~/.codeium/windsurf/skills", Detect: "~/.codeium/windsurf"},
 		// 大厂自研 Agent
-		{Path: "~/.codebuddy/skills", Detect: "~/.codebuddy"},
-		{Path: "~/.qoder/skills", Detect: "~/.qoder"},
-		{Path: "~/.kiro/skills", Detect: "~/.kiro"},
-		{Path: "~/.joycode/skills", Detect: "~/.joycode"},
-		// 通用跨工具入口
-		{Path: "~/.agents/skills", Detect: "~/.agents"},
+		{Name: "codebuddy", Path: "~/.codebuddy/skills", Detect: "~/.codebuddy"},
+		{Name: "qoder", Path: "~/.qoder/skills", Detect: "~/.qoder"},
+		{Name: "kiro", Path: "~/.kiro/skills", Detect: "~/.kiro"},
+		{Name: "joycode", Path: "~/.joycode/skills", Detect: "~/.joycode"},
+		// 通用跨工具入口（Pi 等走 ~/.agents/skills）
+		{Name: "agents", Path: "~/.agents/skills", Detect: "~/.agents"},
 	}
 	for i := range targets {
 		p, err := expandPath(targets[i].Path)
@@ -100,6 +100,10 @@ func defaultGlobalConfig() (Config, error) {
 		skillTargets[i].Detect = d
 	}
 	mcpSource, err := expandPath("~/.config/agentsync/mcp.json")
+	if err != nil {
+		return Config{}, err
+	}
+	policyPath, err := expandPath("~/.config/agentsync/sync-policy.json")
 	if err != nil {
 		return Config{}, err
 	}
@@ -148,6 +152,7 @@ func defaultGlobalConfig() (Config, error) {
 		SkillTargets: skillTargets,
 		MCPSource:    mcpSource,
 		MCPTargets:   mcpTargets,
+		PolicyPath:   policyPath,
 	}, nil
 }
 

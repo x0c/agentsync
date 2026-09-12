@@ -25,6 +25,8 @@ type Config struct {
 	SkillTargets []SkillTarget
 	MCPSource    string
 	MCPTargets   []MCPTarget
+	// PolicyPath is ~/.config/agentsync/sync-policy.json (optional; missing = allow-all).
+	PolicyPath string
 }
 
 type MCPTarget struct {
@@ -37,6 +39,8 @@ type MCPTarget struct {
 }
 
 type SkillTarget struct {
+	// Name is the stable runtime key used in sync-policy.json (e.g. "codex").
+	Name string
 	Path string
 	// Detect 语义同 Target.Detect：runtime 未安装时跳过，不创建其 skill 根目录。
 	Detect string

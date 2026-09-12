@@ -12,6 +12,7 @@ agentsync 要解决的是各工具 MCP 配置漂移：同一套服务器在不�
 
 - **统一源即唯一真相**：目标里的 MCP 服务器集合以统一源为准覆盖；实现时往全局 `AGENTS.md` 注入一段幂等托管说明，让 Agent 只改统一源、不要改各工具自己的配置。
 - **统一源路径**：`~/.config/agentsync/mcp.json`（与 `AGENTS.md`、`skills/` 平级）。
+- **按工具裁剪**：可选 `~/.config/agentsync/sync-policy.json`（与 `mcp.json` 平级，**不含 token**，可跨机同步）。统一源仍是全集；过滤只发生在写出到某个 runtime 时。缺省文件 = 行为与过去完全一致。求值：**deny 优先** → 若该 target 写了非空 `allow` 则白名单 → 否则用 `mcp.default`（缺省 `allow`）。目标键用 `MCPTarget.Name`（`codex`、`claude`、`cursor`…）。名称匹配大小写不敏感；未知 target 名只警告不失败。不做 tool 名级过滤，也不写各工具的 disabled/企业 allowlist。实现：`internal/agentsync/policy.go`，在 `filterServersForDialect` 之前按 Name 过滤。
 - **统一源 schema**（Claude/Cursor 常见形态）：
 
 ```json
@@ -44,7 +45,8 @@ agentsync 要解决的是各工具 MCP 配置漂移：同一套服务器在不�
 
 ```mermaid
 flowchart LR
-    Source["统一源 mcp.json"] --> Translate["按 runtime 做 schema 翻译"]
+    Source["统一源 mcp.json"] --> Policy["sync-policy 按 Name 过滤"]
+    Policy --> Translate["按 runtime 做 schema 翻译"]
     Translate --> Dedicated["独立 MCP 文件整段覆盖"]
     Translate --> Mixed["综合配置只改 MCP 那个 key"]
     Dedicated --> Cursor["Cursor / Copilot / Kimi / Factory / Windsurf / Junie / Kiro / JoyCode"]
@@ -53,6 +55,28 @@ flowchart LR
     Mixed --> OpenCode["OpenCode opencode.json 的 mcp"]
 ```
 
+策略文件示例（Codex 不要 tavily；Claude 只保留白名单）：
+
+```json
+{
+  "version": 1,
+  "mcp": {
+    "default": "allow",
+    "targets": {
+      "codex": { "deny": ["tavily"] },
+      "claude": { "allow": ["codebase-memory-mcp", "context7"] }
+    }
+  },
+  "skills": {
+    "default": "allow",
+    "targets": {
+      "codex": { "deny": ["lark-im"] }
+    }
+  }
+}
+```
+
+`skills` 段与 MCP 同规则；有有效过滤时该工具的 skill 根改为真实目录 + 指向统一源的子软链，无过滤时仍整目录软链到统一源。
 ## 二、写入策略总表（按 Detect 门控）
 
 「模式」：`file` = 独立 MCP 文件，可用整段覆盖；`key` = 综合配置里只改指定 key，必须保留其余内容。

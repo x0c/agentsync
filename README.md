@@ -2,25 +2,27 @@
 
 # agentsync
 
-**Switch AI coding tools without rebuilding your setup.**
+**Stop copying Cursor rules into Claude Code by hand.**
 
-Sync global AI coding-agent rules, skills, and MCP server configs across Claude Code, Codex, Cursor, Gemini CLI, and more. Keep one source of truth and apply it to your installed tools with one command.
+Sync Claude Code and Cursor rules, skills, and MCP configs from one source of truth. One CLI also covers Codex, Gemini CLI, and other AI coding agents you already installed.
 
 [![CI](https://github.com/x0c/agentsync/actions/workflows/ci.yml/badge.svg)](https://github.com/x0c/agentsync/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/x0c/agentsync)](https://github.com/x0c/agentsync/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Why agentsync?
 
-You update a coding rule in Claude Code, then copy it into Codex. Add a skill or MCP server, and repeat the setup for every other assistant. agentsync brings that maintenance into one place.
+You write a Cursor rule, then paste it into Claude Code. You add a skill or an MCP server, then repeat the setup. The copies drift.
 
-| Maintain once | agentsync handles |
+This CLI keeps one machine-local source and syncs it to each installed tool. It does **not** convert a project's `.cursor/rules/*.mdc` files into `CLAUDE.md`, and it is **not** the npm playground named `agentsync`.
+
+| You maintain once | agentsync syncs |
 | --- | --- |
-| Global instructions in `AGENTS.md` | Link or generate each tool's instruction entry |
-| Complete skill folders in `skills/` | Share skill instructions, scripts, and references |
-| MCP servers in `mcp.json` | Translate configuration into each tool's format |
+| Global instructions in `AGENTS.md` | Each tool's instruction entry (Claude Code, Cursor, Codex, …) |
+| Complete skill folders in `skills/` | Shared skill instructions, scripts, and references |
+| MCP servers in `mcp.json` | Each tool's MCP config format |
 
-One standalone binary. No Node.js or Python required. Existing files are backed up before replacement; uninstalled tools are skipped. Feature coverage varies by tool—see the path reference below.
+One standalone Go binary. No Node.js or Python required. Existing files are backed up before replacement; uninstalled tools are skipped. Feature coverage varies by tool—see the path reference below.
 
-If agentsync saves you from maintaining duplicate configs, a Star helps you find it again.
+If this saves you from maintaining duplicate configs, a Star helps you find it again.
 
 ## Install
 
@@ -82,7 +84,7 @@ Keep it applied without running the command by hand:
 agentsync --watch
 ```
 
-This polls the canonical `AGENTS.md`, `mcp.json`, `skills/`, and whether each runtime's home directory exists. Edit the canonical files (or install a new agent) and the copies are rewritten for you. Changing only `AGENTS.md` or `skills/` does not rewrite MCP configs. MCP configs cannot be symlinks, so this is how those stay in sync. `--watch` cannot be combined with `--check`, `--repo`, `--all`, `--adopt`, or `--force`.
+This polls the canonical `AGENTS.md`, `mcp.json`, `skills/`, `sync-policy.json`, and whether each runtime's home directory exists. Edit the canonical files (or install a new agent) and the copies are rewritten for you. Changing only `AGENTS.md` or `skills/` (with an unchanged policy) does not rewrite MCP configs. MCP configs cannot be symlinks, so this is how those stay in sync. `--watch` cannot be combined with `--check`, `--repo`, `--all`, `--adopt`, or `--force`.
 
 A systemd user unit lives in `contrib/systemd/agentsync.service`. On Linux:
 
@@ -120,7 +122,7 @@ agentsync --all ~/Codes
 - `--check` is read-only.
 - Existing unique instruction content is appended to the canonical source before aliases are created.
 - Existing skill directories are copied into the canonical skill directory before tool-specific skill roots are replaced with aliases.
-- MCP servers are imported once into `~/.config/agentsync/mcp.json` (first installed runtime wins on case-insensitive name clashes), then overwritten onto installed tools using each tool's schema. Codex bundled local servers are not copied to other tools. `--repo` and `--all` do not sync MCP.
+- MCP servers are imported once into `~/.config/agentsync/mcp.json` (first installed runtime wins on case-insensitive name clashes), then overwritten onto installed tools using each tool's schema. Optional `~/.config/agentsync/sync-policy.json` can deny or allowlist servers / skills per runtime (canonical sources stay complete). Codex bundled local servers are not copied to other tools. `--repo` and `--all` do not sync MCP.
 - Replaced files and directories are backed up under `~/.config/agentsync/backups/`.
 - Hidden skill directories such as Codex `.system` internals are preserved in the canonical skill root before tool-specific skill roots are replaced.
 - macOS and Linux use symlinks first.
@@ -179,7 +181,7 @@ Canonical skill directory:
 ~/.config/agentsync/skills/<skill-name>/SKILL.md
 ```
 
-Tool-specific skill aliases (created only when the runtime is installed), each pointing at `~/.config/agentsync/skills`:
+Tool-specific skill aliases (created only when the runtime is installed). By default each points at `~/.config/agentsync/skills`. If `sync-policy.json` filters skills for that runtime, the tool root becomes a real directory of per-skill symlinks instead:
 
 ```text
 ~/.claude/skills          ~/.config/amp/skills
@@ -194,7 +196,7 @@ Tool-specific skill aliases (created only when the runtime is installed), each p
 ~/.agents/skills
 ```
 
-Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Because tool-specific skill roots point at the canonical root, adding, deleting, or renaming a canonical skill is reflected by every tool immediately. Pi has no dedicated skill alias because it reads `~/.agents/skills/` natively.
+Each skill is managed as a whole directory under the canonical skill root. A skill must contain `SKILL.md`; any scripts, templates, references, or assets next to it stay with that skill. Unfiltered tool roots point at the canonical root, so adding, deleting, or renaming a canonical skill is reflected immediately. Filtered roots only expose allowed skills. Pi has no dedicated skill alias because it reads `~/.agents/skills/` natively.
 
 Canonical MCP config:
 
@@ -202,7 +204,27 @@ Canonical MCP config:
 ~/.config/agentsync/mcp.json
 ```
 
-On global `agentsync` (not `--repo` / `--all`), that file is translated into each installed runtime's user-level MCP config. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow is skipped. `~/.agents` has no MCP entry. Codex bundled local servers (`node_repl`, `computer-use`) stay on Codex only. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. `mcp.json` is machine-local (tokens, host paths) and is added to `.gitignore` / `.stignore` when the config directory is a git repo or Syncthing folder. Do not sync it across machines.
+Optional per-runtime filter (no tokens; safe to sync across machines):
+
+```text
+~/.config/agentsync/sync-policy.json
+```
+
+Example — keep tavily out of Codex:
+
+```json
+{
+  "version": 1,
+  "mcp": {
+    "default": "allow",
+    "targets": {
+      "codex": { "deny": ["tavily"] }
+    }
+  }
+}
+```
+
+On global `agentsync` (not `--repo` / `--all`), `mcp.json` is translated into each installed runtime's user-level MCP config after applying `sync-policy.json`. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow is skipped. `~/.agents` has no MCP entry. Codex bundled local servers (`node_repl`, `computer-use`) stay on Codex only. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. `mcp.json` is machine-local (tokens, host paths) and is added to `.gitignore` / `.stignore` when the config directory is a git repo or Syncthing folder. Do not sync it across machines.
 
 
 </details>
@@ -215,7 +237,9 @@ On global `agentsync` (not `--repo` / `--all`), that file is translated into eac
 
 **Does it sync between computers?** agentsync aligns tools on one machine; it is not a cloud sync service. Keep MCP configuration machine-local because it can contain tokens and host-specific paths.
 
-**What about team rule generation?** agentsync focuses on personal global configuration across assistants; repository mode manages the `CLAUDE.md` entry. For broader project-level rule generation, also explore [Ruler](https://github.com/intellectronica/ruler) and [Rulesync](https://github.com/dyoshikawa/rulesync).
+**What about team rule generation?** This CLI focuses on personal global configuration across assistants; repository mode manages the `CLAUDE.md` entry. For broader project-level rule generation, also explore [Ruler](https://github.com/intellectronica/ruler) and [Rulesync](https://github.com/dyoshikawa/rulesync).
+
+**Is this the npm `agentsync` playground?** No. This repository is the Go CLI `x0c/agentsync` (Homebrew cask `x0c/tap/agentsync`). The npm package `@panishandsome/agentsync` and its browser playground belong to a different project.
 
 **Found a problem or missing tool?** [Open an issue](https://github.com/x0c/agentsync/issues) with the tool name, operating system, and redacted check output. Do not upload token-bearing MCP configs. See the [workflow guide](docs/AGENTSYNC_GUIDE.md) for supported behavior.
 

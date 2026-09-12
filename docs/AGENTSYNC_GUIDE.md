@@ -50,6 +50,7 @@ flowchart TD
 | 规范统一源 | `~/.config/agentsync/AGENTS.md` | 所有工具共享的指令文件 |
 | Skill 统一源 | `~/.config/agentsync/skills` | 每个子目录是一个完整 skill |
 | MCP 统一源 | `~/.config/agentsync/mcp.json` | 所有已安装工具共享的 MCP 服务器集合 |
+| 同步策略 | `~/.config/agentsync/sync-policy.json` | 可选；按工具裁剪写出的 MCP / Skill（不含 token） |
 
 规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
 
@@ -64,7 +65,23 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
 
 第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态，未装的工具显示 `skipped`。第二次运行已安装工具应收敛到 `ok`，这是幂等性判断的主要用户信号。
 
-全局模式还会把 `mcp.json` 翻译写入已安装工具的用户级 MCP 配置，并在 `AGENTS.md` 注入「只改统一源」说明。仓库模式与 `--all` 不同步 MCP。落点与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
+全局模式还会把 `mcp.json` 翻译写入已安装工具的用户级 MCP 配置，并在 `AGENTS.md` 注入「只改统一源」说明。可用 `sync-policy.json` 按工具排除或白名单某些 MCP / Skill（统一源仍是全集）。仓库模式与 `--all` 不同步 MCP。落点与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
+
+示例：让 Codex 不同步 tavily，其它工具照常：
+
+```json
+{
+  "version": 1,
+  "mcp": {
+    "default": "allow",
+    "targets": {
+      "codex": { "deny": ["tavily"] }
+    }
+  }
+}
+```
+
+保存为 `~/.config/agentsync/sync-policy.json` 后运行 `agentsync`（或等 `--watch`）。报告里 Codex 行会带 `filtered out: tavily`。
 
 ## 检查模式
 
@@ -73,7 +90,8 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
 | 状态 | 含义 | 下一步 |
 |---|---|---|
 | `skipped` | 该工具未安装（`Detect` 主目录不存在） | 无需处理；装了该工具再跑一次即可收敛 |
-| `ok` | 入口已指向统一源 | 无需处理 |
+| `ok` | 入口已指向统一源（或过滤后的 MCP/Skill 视图已一致） | 无需处理 |
+| `warning` | 策略里写了未知的工具名 | 检查 `sync-policy.json` 的 target 键 |
 | `missing` | 统一源或目标入口缺失 | 直接运行 `agentsync` 创建 |
 | `mergeable` | 目标文件有独特内容，可合并进统一源 | 运行 `agentsync`，必要时检查合并结果 |
 | `replaceable` | 文件或目录可被备份后替换 | 运行 `agentsync` |
@@ -85,7 +103,7 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
 
 ## 后台监听
 
-MCP 配置不能整文件 symlink，Cursor 的 `AGENTS.mdc` 也是受管副本。`--watch` 用标准库轮询（默认 2 秒）统一源 `AGENTS.md` / `mcp.json` / `skills/`，以及各 runtime `Detect` 目录是否出现。指纹按这四块分开：只改规范或 Skill 时**不同步 MCP**，避免把工具 UI 里新加的服务器冲掉。`mcp.json` 变化或新装 runtime（Detect 出现）才会写 MCP。变化必须连续稳定一段时间才同步（trailing debounce，默认 1.5 秒）；新 Detect 目录再多等约 5 秒，给安装器写完首次配置。Skill 指纹忽略 Syncthing 冲突文件和 `.DS_Store`，但会跟踪 `.system` 隐藏 skill。它**不**监视 `~/.claude.json` 等热文件，避免写回环，也不从工具侧把 MCP 拉回统一源。用户应只改统一源。
+MCP 配置不能整文件 symlink，Cursor 的 `AGENTS.mdc` 也是受管副本。`--watch` 用标准库轮询（默认 2 秒）统一源 `AGENTS.md` / `mcp.json` / `skills/` / `sync-policy.json`，以及各 runtime `Detect` 目录是否出现。指纹按这几块分开：只改规范或 Skill、且策略未变时**不同步 MCP**，避免把工具 UI 里新加的服务器冲掉。`mcp.json`、策略文件变化或新装 runtime（Detect 出现）才会写 MCP。变化必须连续稳定一段时间才同步（trailing debounce，默认 1.5 秒）；新 Detect 目录再多等约 5 秒，给安装器写完首次配置。Skill 指纹忽略 Syncthing 冲突文件和 `.DS_Store`，但会跟踪 `.system` 隐藏 skill。它**不**监视 `~/.claude.json` 等热文件，避免写回环，也不从工具侧把 MCP 拉回统一源。用户应只改统一源与策略文件。
 
 空文件、`{}`、缺 `mcpServers` 的 `mcp.json` 会报错并跳过，不会清空已安装工具。watch 下即便写成 `"mcpServers": {}`，只要工具侧还有服务器也会拒绝覆盖；要清空请手动跑一次 `agentsync`。同步失败不会把这次坏指纹记成已处理，下次仍会重试。
 
