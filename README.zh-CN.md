@@ -8,6 +8,8 @@
 
 [![CI](https://github.com/x0c/agentsync/actions/workflows/ci.yml/badge.svg)](https://github.com/x0c/agentsync/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/x0c/agentsync)](https://github.com/x0c/agentsync/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+![agentsync 检查、同步与复核演示](docs/images/demo.gif)
+
 ## 为什么用 agentsync？
 
 你写好一条 Cursor 规则，再粘贴进 Claude Code；加了一个技能或 MCP 服务器，又要逐个重配。几份副本很快就会分叉。

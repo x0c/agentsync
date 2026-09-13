@@ -8,6 +8,8 @@ Sync Claude Code and Cursor rules, skills, and MCP configs from one source of tr
 
 [![CI](https://github.com/x0c/agentsync/actions/workflows/ci.yml/badge.svg)](https://github.com/x0c/agentsync/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/x0c/agentsync)](https://github.com/x0c/agentsync/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+![agentsync check, sync, and verify demo](docs/images/demo.gif)
+
 ## Why agentsync?
 
 You write a Cursor rule, then paste it into Claude Code. You add a skill or an MCP server, then repeat the setup. The copies drift.

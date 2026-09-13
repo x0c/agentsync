@@ -44,7 +44,15 @@ Name-collision warning: `PanisHandsome/ai-rules-sync` titles its README `# agent
 | Description | Sync AI coding-agent rules, skills, and MCP configs across Claude Code, Codex, Cursor, Gemini CLI, and more. One source of truth, one CLI. | Sync Claude Code and Cursor rules, skills, and MCP configs from one source of truth. One CLI for Codex, Gemini CLI, and other AI coding agents. |
 | Topics | `agent-skills`, `agents-md`, `ai-agents`, `ai-coding`, `claude-code`, `cli`, `codex`, `configuration-management`, `cursor`, `developer-tools`, `dotfiles`, `gemini-cli`, `golang`, `mcp` | `agent-skills`, `agents-md`, `ai-agents`, `claude`, `claude-code`, `cli`, `codex`, `cursor`, `cursorrules`, `developer-tools`, `gemini-cli`, `golang`, `mcp`, `mcp-server`, `skills` |
 
-Pushing git does not update About or Topics. Re-run the same six queries after GitHub has reindexed (hours, not minutes). Ranking movement is not claimed in this session.
+Pushing git does not update About, Topics, or Social preview. Re-run the same six queries after GitHub has reindexed (hours, not minutes). Ranking movement is not claimed in this session.
+
+## 2026-09-14 storefront landing (Demo + Social preview asset, About/Topics frozen)
+
+- Added `docs/images/demo.gif` (check → sync → recheck, Codex + Claude entries; verbatim compacted from the README Quick start excerpt) and embedded it on the first screen of both READMEs below the badges. GIF is self-rendered, ~121KB / 33 frames — no fake UI, no stolen screenshots.
+- Added `docs/images/social-preview.png` (1280×640, ~52KB, real terminal content) as the Social preview upload source. Upload itself is a web Settings action and is **not yet done**.
+- About/Topics intentionally **not** changed in this round: 09-13 day-2 retest showed ±20–40 rank drift on `sync claude cursor rules` (#60→#65); per growth-guide noise discipline, same-day re-editing is prohibited.
+- No homepage set: there is no docs site, and pointing it at a release page adds no discovery value. Do not fabricate one.
+- Verified: `go test ./...` + `go build ./...` pass; isolated-HOME `agentsync --check` / apply / recheck cycle behaves (`mergeable` → `merged` → `ok`, uninstalled runtimes `skipped`); README relative links resolve.
 
 ## Reference review
 
