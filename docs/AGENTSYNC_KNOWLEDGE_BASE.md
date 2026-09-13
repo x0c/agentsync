@@ -192,7 +192,7 @@ CLAUDE.md -> AGENTS.md
 | 构建 | `go build ./...` | `go.mod`；`main.go` | 验证 CLI 可编译 |
 | 安装 | `go install .` | Go toolchain | 覆盖本机 agentsync |
 | CI | GitHub Actions CI | `.github/workflows/ci.yml` | 多系统测试和构建 |
-| 发布 | GoReleaser | `.github/workflows/release.yml`；`.goreleaser.yml` | tag 发布和 Homebrew cask 更新 |
+| 发布 | CI gate → GoReleaser | `.github/workflows/ci.yml`；`.github/workflows/release.yml`；`.goreleaser.yml` | 先验证 tag 的同一提交通过三系统测试，再发布并更新 Homebrew cask |
 
 ## §6 核心规则与隐性约束
 

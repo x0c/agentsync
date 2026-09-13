@@ -185,7 +185,7 @@ func TestWatchTreeFingerprintIncludesHiddenSkills(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(hidden, "SKILL.md"), []byte("new\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(hidden, "SKILL.md"), []byte("new content\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	after, err := watchTreeFingerprint(dir)

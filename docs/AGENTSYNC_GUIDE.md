@@ -215,7 +215,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-GitHub Actions 的 release 工作流使用 GoReleaser，读取 `.goreleaser.yml`，构建 Linux、Darwin、Windows 的 amd64/arm64 产物，并更新 `x0c/homebrew-tap` 的 cask。
+GitHub Actions 的 release 工作流先对该 tag 的同一提交复用 CI，在 Linux、macOS、Windows 都完成测试与构建后才运行 GoReleaser。GoReleaser 读取 `.goreleaser.yml`，构建 Linux、Darwin、Windows 的 amd64/arm64 产物，并更新 `x0c/homebrew-tap` 的 cask。任一系统失败时不得创建正式 Release 或更新 Homebrew。
 
 发布前必须确认：
 

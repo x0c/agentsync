@@ -12,8 +12,14 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  validate:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.ref_name }}
+
   release:
     name: GoReleaser
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

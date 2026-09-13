@@ -10,6 +10,7 @@ coverage.out
 
 # doc-init 扫描产物
 .doc-init-*.json
+.codebase-memory/
 
 # OS / editor
 .DS_Store
