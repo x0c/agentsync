@@ -6,6 +6,7 @@ on:
       ref:
         type: string
         required: true
+  workflow_dispatch:
   push:
     branches:
       - main
