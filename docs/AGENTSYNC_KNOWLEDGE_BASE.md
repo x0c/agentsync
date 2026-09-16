@@ -31,7 +31,7 @@ agentsync 的同步机制围绕“统一源”和“工具入口”展开。统�
 - 安装门控（Detect）：每个规范/Skill/MCP 入口都带一个 `Detect` 标志目录，取该工具的用户级主目录（如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，`syncTarget()` / `syncSkillRoot()` / `syncMCPTarget()` 直接返回 `skipped`，不创建任何目录或文件。这样一台机器上只会为真正装了的工具建立入口。
 - 仓库级源：当前 Git 仓库的 `AGENTS.md`。
 - 仓库级目标：当前 Git 仓库的 `CLAUDE.md`。
-- 备份目录：`~/.config/agentsync/backups/`，由路径清洗后的目标路径和时间戳组成。
+- 备份目录：`~/.config/agentsync/backups/`。每次真实同步共用一个时间戳目录（`YYYYMMDD-HHMMSS`，同秒冲突时加 `-01` 后缀），内含路径清洗后的载荷和 `manifest.json`（原始绝对路径 + `file`/`symlink`/`dir`）。`--rollback` 按该清单还原。
 
 同步机制的安全原则是：先保留已有内容，再替换入口。文件内容通过合并或草稿处理，目录内容通过复制到统一源或备份后替换。
 
@@ -40,6 +40,7 @@ agentsync 的同步机制围绕“统一源”和“工具入口”展开。统�
 ```mermaid
 flowchart TD
     CLI[main.go] --> Run[Run]
+    Run -->|--rollback| Restore[runRollback]
     Run --> Config[defaultGlobalConfig / repoConfig]
     Config --> Sync[syncConfig]
     Sync --> Target[syncTarget]
@@ -59,6 +60,7 @@ flowchart TD
     Root --> Backup
     Root --> Alias
     Apply --> Backup
+    Restore --> Backup
 ```
 
 下图仅画出部分入口，完整清单以 `defaultGlobalConfig()` 为准；每条边只有在对应工具已安装（`Detect` 标志目录存在）时才会真正建立。
@@ -147,6 +149,8 @@ CLAUDE.md -> AGENTS.md
 | `internal/agentsync/merge.go` | 合并草稿、采纳草稿、内容追加 | `createMergeDraft()`、`adoptDraft()` |
 | `internal/agentsync/paths.go` | 默认路径、仓库路径、备份目录、路径展开 | `defaultGlobalConfig()`、`repoConfig()` |
 | `internal/agentsync/files.go` | 创建别名、备份文件/目录、删除/复制/内容比较 | `createAlias()`、`backupFile()`、`backupAny()` |
+| `internal/agentsync/backup_session.go` | 同步会话共用时间戳、`manifest.json`、戳列表 | `beginBackupSession()`、`endBackupSession()`、`resolveBackupStamp()` |
+| `internal/agentsync/restore.go` | `--rollback` 按清单还原 | `runRollback()`、`restoreManifestEntry()` |
 | `internal/agentsync/types.go` | Options、Config、TargetResult、RunReport 数据结构 | `Options`、`RunReport` |
 | `internal/agentsync/run_test.go` | 同步行为、幂等、Skill 目录、安全边界测试 | 多个 `Test*` |
 
@@ -154,7 +158,7 @@ CLAUDE.md -> AGENTS.md
 
 | 场景 | 入口 | 类/方法/配置 | 说明 |
 |---|---|---|---|
-| 新增或修改 CLI 参数 | CLI 入口 | `main.go` 的 `main()`；`internal/agentsync/types.go` 的 `Options` | 参数必须写入 `Options` 后由 `Run()` 统一分发；`--watch` 走 `watchLoop()` |
+| 新增或修改 CLI 参数 | CLI 入口 | `main.go` 的 `main()`；`internal/agentsync/types.go` 的 `Options` | 参数必须写入 `Options` 后由 `Run()` 统一分发；`--watch` 走 `watchLoop()`；`--rollback` 走 `runRollback()` |
 | 修改全局默认路径 | 路径配置 | `defaultGlobalConfig()` | 同步源、目标入口和 Skill 入口都在这里定义 |
 | 修改仓库模式 | 仓库配置 | `repoConfig()`；`findRepoRoot()` | 只管理当前仓库 `CLAUDE.md` 到 `AGENTS.md` |
 | 修改规范文件同步 | 规范同步 | `syncConfig()`；`syncTarget()` | 决定缺失、冲突、合并、替换和报告状态 |
@@ -164,7 +168,8 @@ CLAUDE.md -> AGENTS.md
 | 修改 watch 指纹或防抖 | 后台监听 | `watchLoop()`；`watchSkipMCP()`；`Options.SkipMCP` | `SkipMCP` 不是 CLI flag；只改 AGENTS/skills 时禁止写 MCP |
 | 修改合并策略 | 合并机制 | `appendImportedContent()`；`createMergeDraft()`；`adoptDraft()` | 影响已有内容如何进入统一源 |
 | 修改别名降级策略 | 文件机制 | `createAlias()`；`writeManagedCopy()` | 影响 symlink、hardlink、受管副本选择 |
-| 修改备份策略 | 文件机制 | `backupFile()`；`backupAny()`；`backupDir()` | 影响用户可恢复性 |
+| 修改备份策略 | 文件机制 | `backupFile()`；`backupAny()`；`backupDir()`；`beginBackupSession()` | 影响用户可恢复性；改清单格式须保持 `--rollback` 可读 |
+| 修改回滚行为 | 恢复机制 | `runRollback()`；`restoreManifestEntry()` | 必须支持 `--check` 只读预览；还原前再备份；禁止自动再 sync |
 | 修改报告格式 | 输出机制 | `printReport()`；`TargetResult`；`RunReport` | README、测试和用户脚本可能依赖输出语义 |
 
 ## §4 数据与持久化入口
@@ -180,7 +185,7 @@ CLAUDE.md -> AGENTS.md
 | 工具规范入口 | Codex/OpenCode/Claude/Gemini/Qwen/Copilot/Kimi Code/Grok/Amp/Crush/Goose/Factory/iFlow/Kilo/Windsurf/Zed/CodeBuddy/Qoder/Junie/Kiro/JoyCode 全局指令文件，及通用 `~/.agents/AGENTS.md`（完整清单见 `defaultGlobalConfig()`） | 工具读取规范的入口 | 可为 symlink、hardlink 或受管副本；工具未安装（`Detect` 目录缺失）时不创建 |
 | 工具 Skill 入口 | 各工具 skill 根目录 | 工具发现 skill 的入口 | 默认根目录整体别名；有 skills 策略过滤时改为子软链物化；工具未安装时不创建 |
 | 仓库级入口 | `AGENTS.md`、`CLAUDE.md` | 项目文档入口 | `CLAUDE.md` 应只指向 `AGENTS.md` |
-| 备份 | `~/.config/agentsync/backups/` | 替换前恢复点 | 替换文件和目录前必须写备份 |
+| 备份 | `~/.config/agentsync/backups/<stamp>/` | 替换前恢复点；含 `manifest.json` | 替换文件和目录前必须写备份；一键还原用 `--rollback` |
 | 合并草稿 | `~/.config/agentsync/merge-drafts/` | 人工整理冲突内容 | 采纳后会替换统一源 |
 
 ## §5 任务与外部流程入口
@@ -188,7 +193,7 @@ CLAUDE.md -> AGENTS.md
 | 类型 | 标识 | 代码/配置入口 | 适用场景 |
 |---|---|---|---|
 | CLI 冒烟 | `agentsync --check` | `Run()`；`printReport()` | 验证真实机器状态不被修改 |
-| 单元测试 | `go test ./...` | `internal/agentsync/run_test.go`；`internal/agentsync/mcp_test.go`；`internal/agentsync/watch_test.go` | 验证合并、链接、Skill 导入、MCP 同步、watch 安全边界和幂等 |
+| 单元测试 | `go test ./...` | `internal/agentsync/run_test.go`；`internal/agentsync/mcp_test.go`；`internal/agentsync/watch_test.go`；`internal/agentsync/restore_test.go` | 验证合并、链接、Skill 导入、MCP 同步、watch 安全边界、回滚和幂等 |
 | 构建 | `go build ./...` | `go.mod`；`main.go` | 验证 CLI 可编译 |
 | 安装 | `go install .` | Go toolchain | 覆盖本机 agentsync |
 | CI | GitHub Actions CI | `.github/workflows/ci.yml` | 多系统测试和构建 |
@@ -196,7 +201,8 @@ CLAUDE.md -> AGENTS.md
 
 ## §6 核心规则与隐性约束
 
-- **AI 易错点**【检查模式】`--check` 必须只读。新增分支时，所有写文件、建目录、备份、删除、复制、重命名动作都必须被 `opts.Check` 拦住，否则预览命令会真实改用户目录。`--watch` 禁止与 `--check` 组合。
+- **AI 易错点**【检查模式】`--check` 必须只读。新增分支时，所有写文件、建目录、备份、删除、复制、重命名动作都必须被 `opts.Check` 拦住，否则预览命令会真实改用户目录。`--watch` 禁止与 `--check` 组合。`--rollback --check` 只报告 `restore`，不改线上文件。
+- **AI 易错点**【回滚与备份会话】真实同步必须 `beginBackupSession`/`endBackupSession`，同一轮写入共用一个戳并写 `manifest.json`。戳目录必须唯一（同秒用 `-01` 后缀），否则回滚前再备份会覆盖正在还原的载荷。`--rollback` 还原后禁止自动 `syncConfig`。无清单的旧戳只能人工恢复。
 - **AI 易错点**【watch 不盯热文件】`--watch` 只指纹统一源（`AGENTS.md` / `mcp.json` / `skills/` / `sync-policy.json`）和 Detect 目录是否存在。监视 `~/.claude.json` 会在每次 MCP 写出后触发回环。用户改工具侧 MCP 文件不会自动拉回统一源，这是故意的；不要做双向 MCP 合并。只改 AGENTS/skills 且策略未变时必须 `SkipMCP`，否则会把 UI 新加的服务器覆盖掉。策略文件变化必须同步 MCP（与 skills）。`SkipMCP` 不是 CLI flag。
 - **AI 易错点**【watch 失败不前进】`watchLoop()` 只有 `runOnce` 成功后才更新 last 指纹。失败、空 `mcp.json`、非法 JSON 都要下次重试，不能把坏内容钉成“已处理”。`--watch` 禁止与 `--force` 组合。Skill 指纹必须忽略 Syncthing 冲突文件 / `.DS_Store` / `.stversions`，但**不能**跳过 `.system` 这类隐藏 skill 目录（否则 Codex 系统 skill 改了不会自动同步）。目录 mtime 不能进指纹，否则跳过的冲突文件仍会触发同步。不要加 `service install` 子命令，也不要把 `--watch` 变成默认行为。
 - **AI 易错点**【按安装门控】每个规范/Skill/MCP 入口都带 `Detect` 标志目录（工具用户级主目录）。`syncTarget()` / `syncSkillRoot()` / `syncMCPTarget()` 必须在最前面判断：`Detect` 非空且目录不存在时返回 `skipped`，绝不为未安装的工具创建目录或文件。新增 runtime 时忘了给 `Detect`，会退化成“无条件为所有工具建目录”，正是本设计要避免的。`Detect` 用主目录而非 skill 子目录（工具装了但还没建 skill 目录时也应正常收敛）。JoyCode 的 MCP 尤其不能为了落盘去创建 `~/.joycode`。

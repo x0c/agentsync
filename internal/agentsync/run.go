@@ -9,8 +9,8 @@ import (
 
 func Run(opts Options) error {
 	if opts.Watch {
-		if opts.Check || opts.Repo || opts.All != "" || opts.Adopt != "" || opts.Force {
-			return fmt.Errorf("--watch cannot be combined with --check, --repo, --all, --adopt, or --force")
+		if opts.Check || opts.Repo || opts.All != "" || opts.Adopt != "" || opts.Rollback != "" || opts.Force {
+			return fmt.Errorf("--watch cannot be combined with --check, --repo, --all, --adopt, --rollback, or --force")
 		}
 		return runWatch(opts)
 	}
@@ -18,6 +18,9 @@ func Run(opts Options) error {
 }
 
 func runOnce(opts Options) error {
+	if opts.Rollback != "" {
+		return runRollback(opts)
+	}
 	if opts.All != "" {
 		return runAll(opts)
 	}
@@ -36,6 +39,12 @@ func runOnce(opts Options) error {
 		}
 	}
 	if opts.Adopt != "" {
+		if !opts.Check {
+			if _, err := beginBackupSession(); err != nil {
+				return err
+			}
+			defer func() { _ = endBackupSession() }()
+		}
 		backups, err := adoptDraft(cfg.Source, opts.Adopt, opts.Check)
 		if err != nil {
 			return err
@@ -54,6 +63,12 @@ func runOnce(opts Options) error {
 		}
 		printReport(report, opts)
 		return nil
+	}
+	if !opts.Check {
+		if _, err := beginBackupSession(); err != nil {
+			return err
+		}
+		defer func() { _ = endBackupSession() }()
 	}
 	report, err := syncConfig(cfg, opts)
 	if err != nil {
@@ -488,8 +503,18 @@ func runAll(opts Options) error {
 	}
 	combined := RunReport{Source: "multiple repositories", Repositories: len(repos)}
 	for _, repo := range repos {
+		if !opts.Check {
+			if _, err := beginBackupSession(); err != nil {
+				return err
+			}
+		}
 		cfg := repoConfig(repo)
 		report, err := syncConfig(cfg, opts)
+		if !opts.Check {
+			if endErr := endBackupSession(); endErr != nil && err == nil {
+				err = endErr
+			}
+		}
 		if err != nil {
 			return err
 		}

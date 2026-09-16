@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 )
 
 const managedMarkerPrefix = "<!-- managed-by: agentsync "
@@ -169,13 +168,12 @@ func backupFile(path string) (string, error) {
 	if info.IsDir() {
 		return "", fmt.Errorf("refusing to back up directory %s", path)
 	}
-	dir, err := backupDir()
+	stampDir, err := backupStampDir()
 	if err != nil {
 		return "", err
 	}
-	stamp := time.Now().Format("20060102-150405")
 	name := sanitizePath(path)
-	dst := filepath.Join(dir, stamp, name)
+	dst := filepath.Join(stampDir, name)
 	if err := ensureParent(dst); err != nil {
 		return "", err
 	}
@@ -184,16 +182,24 @@ func backupFile(path string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(dst+".symlink", []byte(target+"\n"), 0o644); err != nil {
+		storedName := name + ".symlink"
+		storedPath := filepath.Join(stampDir, storedName)
+		if err := os.WriteFile(storedPath, []byte(target+"\n"), 0o644); err != nil {
 			return "", err
 		}
-		return dst + ".symlink", nil
+		if err := recordBackupEntryAt(stampDir, path, storedName, "symlink"); err != nil {
+			return "", err
+		}
+		return storedPath, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
 	if err := os.WriteFile(dst, data, info.Mode().Perm()); err != nil {
+		return "", err
+	}
+	if err := recordBackupEntryAt(stampDir, path, name, "file"); err != nil {
 		return "", err
 	}
 	return dst, nil
@@ -210,13 +216,16 @@ func backupAny(path string) (string, error) {
 	if !info.IsDir() {
 		return backupFile(path)
 	}
-	dir, err := backupDir()
+	stampDir, err := backupStampDir()
 	if err != nil {
 		return "", err
 	}
-	stamp := time.Now().Format("20060102-150405")
-	dst := filepath.Join(dir, stamp, sanitizePath(path))
+	name := sanitizePath(path)
+	dst := filepath.Join(stampDir, name)
 	if err := copyDir(path, dst); err != nil {
+		return "", err
+	}
+	if err := recordBackupEntryAt(stampDir, path, name, "dir"); err != nil {
 		return "", err
 	}
 	return dst, nil

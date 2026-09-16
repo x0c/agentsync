@@ -14,6 +14,7 @@
 | 收敛当前仓库 | `agentsync --repo` | 是 | 当前仓库 `CLAUDE.md` 指向 `AGENTS.md` | `internal/agentsync/paths.go` |
 | 批量收敛仓库 | `agentsync --all ~/Codes` | 是 | 扫描到的仓库数量与每个仓库结果 | `internal/agentsync/run.go` |
 | 采纳合并草稿 | `agentsync --adopt <draft>` | 是 | 备份原统一源并用草稿替换 | `internal/agentsync/merge.go` |
+| 回滚最近一次替换 | `agentsync --rollback latest` | 是 | 按备份戳还原入口；还原前再备份当前文件 | `internal/agentsync/restore.go` |
 | 强制替换冲突入口 | `agentsync --force` | 是 | 备份后替换错误链接或不同内容文件 | `internal/agentsync/run.go` |
 
 ## 命令调度流程
@@ -24,6 +25,7 @@ flowchart TD
     B -->|--all| C[runAll 扫描 Git 仓库]
     B -->|--repo| D[repoConfig 使用仓库 AGENTS.md]
     B -->|--watch| W[watchLoop 轮询统一源与 Detect]
+    B -->|--rollback| R[runRollback 按备份戳还原]
     B -->|默认| E[defaultGlobalConfig 使用用户级统一源]
     D --> F[syncConfig]
     E --> F
@@ -37,9 +39,10 @@ flowchart TD
     H --> J[printReport]
     I --> J
     K --> J
+    R --> J
 ```
 
-命令入口只负责参数到 `Options` 的映射。实际工作都汇入 `Run()`：先判断是否批量仓库模式，再根据全局/仓库模式生成配置，最后执行 `syncConfig()` 并打印报告。
+命令入口只负责参数到 `Options` 的映射。实际工作都汇入 `Run()`：`--rollback` 走备份还原；否则先判断是否批量仓库模式，再根据全局/仓库模式生成配置，最后执行 `syncConfig()` 并打印报告。
 
 ## 全局收敛工作流
 
@@ -107,7 +110,7 @@ MCP 配置不能整文件 symlink，Cursor 的 `AGENTS.mdc` 也是受管副本�
 
 空文件、`{}`、缺 `mcpServers` 的 `mcp.json` 会报错并跳过，不会清空已安装工具。watch 下即便写成 `"mcpServers": {}`，只要工具侧还有服务器也会拒绝覆盖；要清空请手动跑一次 `agentsync`。同步失败不会把这次坏指纹记成已处理，下次仍会重试。
 
-不能与 `--check`、`--repo`、`--all`、`--adopt`、`--force` 同时使用。失败会打到 stderr 并继续监听，方便当 systemd/launchd 服务。
+不能与 `--check`、`--repo`、`--all`、`--adopt`、`--rollback`、`--force` 同时使用。失败会打到 stderr 并继续监听，方便当 systemd/launchd 服务。
 
 CLI 默认仍是一次性 `agentsync`。`--watch` 是可选常驻，不要改成隐式默认，也不要加 `agentsync service install`：只提供模板，由用户自己 enable。
 
@@ -132,6 +135,22 @@ CLAUDE.md -> AGENTS.md
 批量模式的结果聚合到一个报告里，`Repositories` 表示扫描到的仓库数量。某个仓库出现错误会中断本轮执行；这适合个人工作区批量规范 `CLAUDE.md` 指针。
 
 **AI 易错点**：`--all` 的语义是“批量仓库级指针收敛”，不是全局规范和 Skill 同步；不要把它写成对每个仓库执行全局模式。
+
+## 一键回滚
+
+每次真实写入（非 `--check`）会开一个备份会话：同一轮同步里被替换的文件/目录/软链写进同一个时间戳目录，并留下 `manifest.json`（记录原始绝对路径与类型）。
+
+```bash
+agentsync --check --rollback latest   # 只预览会还原哪些路径
+agentsync --rollback latest            # 还原最近一次备份戳
+agentsync --rollback 20260916-120412   # 还原指定戳
+```
+
+还原前会先把当前线上文件再备份一轮，因此回滚本身也可再回滚。回滚**不会**自动再跑一次收敛——避免立刻把统一源重新盖回去。需要重新对齐统一源时再手动执行 `agentsync`。
+
+不能与 `--watch`、`--repo`、`--all`、`--adopt`、`--force` 同时使用。没有 `manifest.json` 的旧备份（本功能上线前）不能一键还原，需人工从 `~/.config/agentsync/backups/<stamp>/` 拷回。
+
+**AI 易错点**：备份戳只包含**当次被替换**的入口，不是整机快照；`latest` 是时间戳目录中最新的一个，不是“上次完整全局同步的并集”。
 
 ## 合并草稿与采纳
 

@@ -60,6 +60,7 @@ go install github.com/x0c/agentsync@latest
 agentsync --check  # 先预览，不修改文件
 agentsync          # 合并已有内容、备份并同步
 agentsync --check  # 检查已安装工具的入口
+agentsync --rollback latest  # 还原最近一次备份戳
 ```
 
 此后只编辑 `~/.config/agentsync/` 中的源文件。规范和 Skill 优先通过链接共享；MCP 配置需要再次运行同步，或使用下方监听模式。
@@ -86,7 +87,7 @@ $ agentsync --check
 agentsync --watch
 ```
 
-它会轮询统一源 `AGENTS.md`、`mcp.json`、`skills/`、`sync-policy.json`，以及各工具主目录是否出现。改统一源或新装了一个 agent，就会自动把副本写回去。只改规范或 Skill、且策略未变时不会重写 MCP。MCP 配置不能软链接，所以靠这个保持同步。`--watch` 不能和 `--check`、`--repo`、`--all`、`--adopt`、`--force` 一起用。
+它会轮询统一源 `AGENTS.md`、`mcp.json`、`skills/`、`sync-policy.json`，以及各工具主目录是否出现。改统一源或新装了一个 agent，就会自动把副本写回去。只改规范或 Skill、且策略未变时不会重写 MCP。MCP 配置不能软链接，所以靠这个保持同步。`--watch` 不能和 `--check`、`--repo`、`--all`、`--adopt`、`--rollback`、`--force` 一起用。
 
 Linux 可用 `contrib/systemd/agentsync.service`：
 
@@ -125,7 +126,8 @@ agentsync --all ~/Codes
 - 已有独特指令内容会先并入统一源文件，再创建软链接。
 - 已有 Skill 目录会先复制到统一 Skill 目录，再将工具侧 Skill 根目录替换成软链接。
 - MCP 服务器会先导入 `~/.config/agentsync/mcp.json`（同名时已安装工具按清单顺序先到先得，大小写不敏感），再按各工具 schema 覆盖已安装入口。可用可选的 `~/.config/agentsync/sync-policy.json` 按工具 deny / 白名单 MCP 或 Skill（统一源仍是全集）。Codex 捆绑的本机服务器不扩散到其他工具。`--repo` 与 `--all` 不同步 MCP。
-- 替换前的文件和目录会备份到 `~/.config/agentsync/backups/`。
+- 替换前的文件和目录会备份到 `~/.config/agentsync/backups/<戳>/`，并写入 `manifest.json` 以便还原。
+- 一键还原：`agentsync --rollback latest`（或指定如 `20260916-120412`）。可用 `--check --rollback latest` 预览。还原前会再备份当前文件，且不会自动再跑同步。
 - Codex `.system` 这类隐藏内部 Skill 目录会先保留到统一 Skill 根目录，再替换工具侧 Skill 根目录。
 - macOS 和 Linux 优先使用软链接。
 - Windows 优先尝试软链接，再尝试硬链接，最后退化为带标记的托管副本。

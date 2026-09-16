@@ -15,6 +15,7 @@ func main() {
 	flag.BoolVar(&opts.Repo, "repo", false, "manage AGENTS.md aliases in the current repository")
 	flag.StringVar(&opts.All, "all", "", "scan and manage every repository under this directory")
 	flag.StringVar(&opts.Adopt, "adopt", "", "adopt a reviewed merge draft as the canonical source")
+	flag.StringVar(&opts.Rollback, "rollback", "", "restore a backup stamp: latest or YYYYMMDD-HHMMSS")
 	flag.BoolVar(&opts.Force, "force", false, "replace conflicting files after backing them up")
 	flag.BoolVar(&opts.Watch, "watch", false, "keep running and sync when the canonical source or an installed runtime changes")
 	flag.Parse()

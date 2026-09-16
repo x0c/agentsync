@@ -60,6 +60,7 @@ Download and extract the matching archive from the [latest release](https://gith
 agentsync --check  # Preview without changing files
 agentsync          # Merge existing content, back up, and sync
 agentsync --check  # Check the installed tools' entries
+agentsync --rollback latest  # Restore the newest backup stamp
 ```
 
 Then edit the source files under `~/.config/agentsync/`. Instructions and skills use shared links where possible; run sync again for MCP changes, or use watch mode below.
@@ -86,7 +87,7 @@ Keep it applied without running the command by hand:
 agentsync --watch
 ```
 
-This polls the canonical `AGENTS.md`, `mcp.json`, `skills/`, `sync-policy.json`, and whether each runtime's home directory exists. Edit the canonical files (or install a new agent) and the copies are rewritten for you. Changing only `AGENTS.md` or `skills/` (with an unchanged policy) does not rewrite MCP configs. MCP configs cannot be symlinks, so this is how those stay in sync. `--watch` cannot be combined with `--check`, `--repo`, `--all`, `--adopt`, or `--force`.
+This polls the canonical `AGENTS.md`, `mcp.json`, `skills/`, `sync-policy.json`, and whether each runtime's home directory exists. Edit the canonical files (or install a new agent) and the copies are rewritten for you. Changing only `AGENTS.md` or `skills/` (with an unchanged policy) does not rewrite MCP configs. MCP configs cannot be symlinks, so this is how those stay in sync. `--watch` cannot be combined with `--check`, `--repo`, `--all`, `--adopt`, `--rollback`, or `--force`.
 
 A systemd user unit lives in `contrib/systemd/agentsync.service`. On Linux:
 
@@ -125,7 +126,8 @@ agentsync --all ~/Codes
 - Existing unique instruction content is appended to the canonical source before aliases are created.
 - Existing skill directories are copied into the canonical skill directory before tool-specific skill roots are replaced with aliases.
 - MCP servers are imported once into `~/.config/agentsync/mcp.json` (first installed runtime wins on case-insensitive name clashes), then overwritten onto installed tools using each tool's schema. Optional `~/.config/agentsync/sync-policy.json` can deny or allowlist servers / skills per runtime (canonical sources stay complete). Codex bundled local servers are not copied to other tools. `--repo` and `--all` do not sync MCP.
-- Replaced files and directories are backed up under `~/.config/agentsync/backups/`.
+- Replaced files and directories are backed up under `~/.config/agentsync/backups/<stamp>/` with a `manifest.json` so you can restore them.
+- One-click restore: `agentsync --rollback latest` (or a stamp like `20260916-120412`). Use `--check --rollback latest` to preview. Rollback backs up current files first and does not re-run sync.
 - Hidden skill directories such as Codex `.system` internals are preserved in the canonical skill root before tool-specific skill roots are replaced.
 - macOS and Linux use symlinks first.
 - Windows tries symlinks first, then hardlinks, then a managed copy with a marker comment.

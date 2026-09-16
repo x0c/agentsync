@@ -77,7 +77,7 @@ goreleaser check
 | 规范文件收敛 | internal/agentsync/run.go；internal/agentsync/merge.go |
 | Skill 根目录收敛 | internal/agentsync/skills.go；internal/agentsync/policy.go |
 | MCP 配置收敛 | internal/agentsync/mcp.go；internal/agentsync/mcp_render.go；internal/agentsync/mcp_apply.go；internal/agentsync/policy.go |
-| 路径、别名与备份策略 | internal/agentsync/paths.go；internal/agentsync/files.go |
+| 路径、别名与备份策略 | internal/agentsync/paths.go；internal/agentsync/files.go；internal/agentsync/backup_session.go；internal/agentsync/restore.go |
 
 ## 待补充知识库（doc-init backlog）
 
@@ -86,7 +86,7 @@ goreleaser check
 
 ## 改动注意事项
 
-- 改 `--check`、`--repo`、`--all`、`--adopt`、`--force`、`--watch` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。`SkipMCP` 只给 `--watch` 内部用，不要加成 CLI flag。不要加 `agentsync service install`：只维护 `contrib/systemd/` 与 `contrib/launchd/` 模板。
+- 改 `--check`、`--repo`、`--all`、`--adopt`、`--rollback`、`--force`、`--watch` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。`SkipMCP` 只给 `--watch` 内部用，不要加成 CLI flag。不要加 `agentsync service install`：只维护 `contrib/systemd/` 与 `contrib/launchd/` 模板。
 - 改统一源、目标入口、备份、合并、别名降级、Skill 根目录替换或 `sync-policy.json` 过滤时，先读 [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
 - 实现或改 MCP 同步（统一源、Detect、写入目标、schema 转换、热文件合并、按工具策略过滤）时，先读 [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)；路径表或转换规则变了必须同步该文档。
 - `CLAUDE.md` 必须保持单行 `@AGENTS.md`，不要在其中写项目规则。
