@@ -134,6 +134,9 @@ func defaultGlobalConfig() (Config, error) {
 		// pi 无内置 MCP；官方 pi-mcp-adapter 扩展读共享全局 ~/.config/mcp/mcp.json（优先级最高，
 		// 且 adapter 承诺只写自有覆盖文件、绝不回写该共享文件），按 Detect ~/.pi/agent 门控。
 		{Name: "pi", Path: "~/.config/mcp/mcp.json", Detect: "~/.pi/agent", Dialect: "cursor", Format: "json", Mode: "file"},
+		// dsh 无独立 mcp.json：MCP 以 dsh-mcp-client 插件实例写进 host 层 cordis.patch.yml
+		// 的 agentsync managed 块（块外用户内容字节级不动）。DSH_HOME 可改根目录。
+		{Name: "dsh", Path: dshPatchPath(), Detect: dshHomeDir(), Dialect: "dsh", Format: "yaml", Mode: "patch"},
 	}
 	for i := range mcpTargets {
 		p, err := expandPath(mcpTargets[i].Path)

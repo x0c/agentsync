@@ -107,7 +107,7 @@ flowchart LR
 | JoyCode | `~/.joycode` | `~/.joycode/joycode-mcp.json` | file | `mcpServers`；**禁止为 MCP 创建** `~/.joycode`（会挡住旧目录迁移） | 做 |
 | Pi | `~/.pi/agent` | `~/.config/mcp/mcp.json` | file | `mcpServers`（标准共享全局配置，见下方 Pi 小节） | 做 |
 | Pi | `~/.pi/agent` | `~/.config/mcp/mcp.json` | file | `mcpServers`（pi-mcp-adapter 扩展读共享全局配置，优先级最高） | 做 |
-| dsh | `~/.dsh` | — | — | MCP 是 `cordis.patch.yml` 里的插件实例，无独立 `mcp.json`；agentsync 不写 patch 文件（见 §3 dsh 小节） | **跳过** |
+| dsh | `~/.dsh`（`$DSH_HOME` 可改根） | `$DSH_HOME/cordis.patch.yml`（host 层，全 profile 生效） | patch | `- insert:` 下每 server 一个 `@deepseek-ai/dsh-mcp-client` 条目；agentsync 只写 marker 包裹的 managed 块 | 做 |
 
 Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\settings.json`；Crush `%LOCALAPPDATA%\crush\crush.json`；Goose `%APPDATA%\Block\goose\config\config.yaml`；Zed `%APPDATA%\Zed\settings.json`。
 
@@ -150,10 +150,13 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 
 ### dsh（DeepSeek Harness，`@deepseek-ai/dsh`）
 
-- **MCP 首发跳过，但机制是明确的**：dsh 没有独立 `mcp.json`，一个 MCP server 就是 `cordis.patch.yml` 里一个 `@deepseek-ai/dsh-mcp-client` 插件实例（`id: mcp-<名>` + `config.serverName/transport/command/args/env/url/headers`）。加载顺序：官方 bundle 默认 → `$DSH_HOME/profiles/<名>/cordis.patch.yml` → `$DSH_HOME/cordis.patch.yml`（全 profile 共用）→ `--patch` 覆盖。用户一般在 `~/.dsh/profiles/web/cordis.patch.yml` 里加 server，且须先 `dsh plugin --profile web add @deepseek-ai/dsh-mcp-client` 把 client 包进 profile 依赖，否则 patch 引用起不来。
-- **agentsync 不写 patch 文件**：往 `cordis.patch.yml` 里合并等同改 profile 组成——文件里常见 `!!js process.env.X` 这类自定义 tag，YAML 回写极易弄坏；且目标机器 profile 若没装 `dsh-mcp-client` 依赖，写进去会直接导致 `dsh web` 无法启动。两条都是不可逆风险，所以只同步规范与 Skill，MCP 留给用户手写 patch。
+- **机制**：dsh 没有独立 `mcp.json`，一个 MCP server 就是 host 层 `$DSH_HOME/cordis.patch.yml`（全 profile 生效）里一个 `@deepseek-ai/dsh-mcp-client` 插件实例：`id: mcp-<名>` + `config.serverName/transport/command/args/env[/cwd]/url/headers`。stdio 直传 `command/args/env`（有 `cwd` 也带上）；http 写 `transport: streamable-http` + `url/headers`。`serverName` 须匹配 `[A-Za-z0-9_-]{1,32}`（官方命名契约），不合规的 server 报 `blocked`，sse 同理（client 只支持 stdio / streamable-http）。Codex 捆绑本机 server 照例不扩散。
+- **只写 managed 块**：patch 文件是 top-level YAML 数组，块外常见 `!!js process.env.X` 等自定义 tag，agentsync 绝不全文件回写。同步只替换 `# managed-by: agentsync start/end` 包裹的 `- insert:` 块（统一源的纯函数输出，按名排序保证确定性）；块外字节级不动。`--check` 比对只看块文本是否一致。
+- **依赖门禁**：client 包不在任何 profile 的 `package.json` 依赖里时直接 `blocked`，不写文件，并给出可复制的安装命令（`dsh plugin --profile <名> add @deepseek-ai/dsh-mcp-client`）。 heterogeneous profile（有的装了有的没装）照写，缺依赖的 profile 名写进报告。
+- **同名冲突**：同一 host 文件块外手写了同 serverName 的 client 条目时 `blocked`（同 scope 后者加载失败，写进去会断掉用户手写配置）；profile 层同名只警告（host 层后加载，天然覆盖，报告里点名）。
+- **写后自检**：落盘后跑 `dsh --profile <web|首个> --dump-config`（只读组成，不启动服务）；失败则按备份回滚并报 `blocked`。自检覆盖组成结构与 patch 形状，不覆盖 npm 包解析——包解析靠上面的依赖门禁。本机无 dsh 可执行文件或无 profile 时跳过自检并注明。
+- **密钥**：env 明文内联进 patch 文件（与其他 runtime 落盘行为一致）；新建文件用 `0600`，不改已有文件权限。`~/.dsh` 若在 git/Syncthing 里，请自行 ignore 该文件（agentsync 的 ignore 体系只覆盖自家配置根）。
 - **不要碰社区插件的状态文件**：`dsh-mcp-manager` 的 `~/.dsh/mcp-manager.json` 存 OAuth token 明文（机密），工作区 `<workspace>/.dsh/dshmm/mcp.json` 是项目级作用域；`dsh-client-ui-settings-mcp` 的 `$DSH_HOME/ui-settings-mcp.json` 是另一套私有 schema。三者都不是官方契约，agentsync 一律不读写。
-- 规范入口（`~/.dsh/AGENTS.md`）与 Skill 入口（`~/.dsh/skills/`，另有已收敛的通用 `~/.agents/skills/`）正常同步，见 [agent_runtime_global_paths.md](agent_runtime_global_paths.md)。
 
 ### Pi（earendil-works/pi）
 

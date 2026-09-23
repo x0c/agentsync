@@ -143,6 +143,9 @@ func importMCPUnion(targets []MCPTarget) []mcpServer {
 
 func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropped []string) (TargetResult, string, error) {
 	target = resolveMCPTarget(target)
+	if target.Dialect == "dsh" {
+		return syncDshMCPTarget(target, servers, opts, dropped)
+	}
 	result := TargetResult{Path: target.Path}
 	if target.Detect != "" && !pathExists(target.Detect) {
 		result.Status = "skipped"
@@ -272,6 +275,21 @@ func loadTargetServers(target MCPTarget) ([]mcpServer, error) {
 	if target.Name == "opencode" {
 		return loadOpenCodeServers(filepath.Dir(target.Path))
 	}
+	if target.Dialect == "dsh" {
+		data, _, err := readExistingMCP(target.Path)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			return []mcpServer{}, nil
+		}
+		// 只读 managed 块；块外手写条目的自定义 tag 解析失败也不影响并集导入。
+		servers, err := extractDshServers(data)
+		if err != nil {
+			return []mcpServer{}, nil
+		}
+		return servers, nil
+	}
 	data, _, err := readExistingMCP(target.Path)
 	if err != nil {
 		return nil, err
@@ -342,6 +360,10 @@ func resolveMCPTarget(target MCPTarget) MCPTarget {
 		target = resolveKiloTarget(target)
 	case "codebuddy":
 		target = resolveCodeBuddyTarget(target)
+	case "dsh":
+		home := dshHomeDir()
+		target.Path = filepath.Join(home, "cordis.patch.yml")
+		target.Detect = home
 	}
 	return target
 }
