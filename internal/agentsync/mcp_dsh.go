@@ -65,7 +65,7 @@ func renderDshPatchBlock(servers []mcpServer) ([]byte, error) {
 	}
 	var buf bytes.Buffer
 	buf.WriteString(dshBlockBegin + "\n")
-	buf.WriteString("# 以下 dsh MCP 条目由统一源 mcp.json 生成，块内每次同步都会覆盖；手写条目请写到块外。\n")
+	buf.WriteString("# dsh MCP entries below are generated from the canonical mcp.json; this block is overwritten on every sync. Put hand-written entries outside the block.\n")
 	buf.Write(body)
 	if !bytes.HasSuffix(body, []byte("\n")) {
 		buf.WriteString("\n")
@@ -76,12 +76,12 @@ func renderDshPatchBlock(servers []mcpServer) ([]byte, error) {
 
 func dshPatchEntry(srv mcpServer) (map[string]any, error) {
 	if !dshServerNameRe.MatchString(srv.Name) {
-		return nil, fmt.Errorf("dsh rejected %q: serverName 须匹配 [A-Za-z0-9_-]{1,32}（dsh-mcp-client 命名契约），请改名后再同步", srv.Name)
+		return nil, fmt.Errorf("dsh rejected %q: serverName must match [A-Za-z0-9_-]{1,32} (dsh-mcp-client naming contract); rename it before syncing", srv.Name)
 	}
 	config := map[string]any{"serverName": srv.Name}
 	if srv.isRemote() {
 		if srv.inferredType() == "sse" {
-			return nil, fmt.Errorf("dsh rejected %q: dsh-mcp-client 只支持 stdio / streamable-http，不支持 sse", srv.Name)
+			return nil, fmt.Errorf("dsh rejected %q: dsh-mcp-client only supports stdio / streamable-http, not sse", srv.Name)
 		}
 		config["transport"] = "streamable-http"
 		if srv.URL != "" {
@@ -335,7 +335,7 @@ func syncDshMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropp
 			hint = "dsh plugin --profile " + profiles[0] + " add " + dshMCPClientName
 		}
 		result.Status = "blocked"
-		result.Detail = detail("dsh-mcp-client 未装进任何 profile 依赖，写 patch 会导致 dsh 无法启动；先跑：" + hint)
+		result.Detail = detail("dsh-mcp-client is not in any profile's dependencies; writing the patch would break dsh startup. Run first: " + hint)
 		return result, "", nil
 	}
 
@@ -362,7 +362,7 @@ func syncDshMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropp
 	}
 	warnSuffix := ""
 	if len(warnings) > 0 {
-		warnSuffix = "；注意块外手写了同名 server（" + strings.Join(warnings, ", ") + "），同 scope 后者加载失败，必要时把手写条目并入统一源后删掉"
+		warnSuffix = "; note: hand-written same-name server(s) outside the block (" + strings.Join(warnings, ", ") + ") will fail to load in the same scope; merge them into the canonical source and delete the hand-written entries if needed"
 	}
 
 	equal := false
@@ -371,14 +371,14 @@ func syncDshMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropp
 	}
 	if equal && pathExists(target.Path) {
 		result.Status = "ok"
-		result.Detail = detail("dsh cordis patch（managed 块已一致）" + warnSuffix)
+		result.Detail = detail("dsh cordis patch (managed block in sync)" + warnSuffix)
 		return result, "", nil
 	}
 
 	if opts.Check {
 		if pathExists(target.Path) {
 			result.Status = "replaceable"
-			result.Detail = detail("would update dsh cordis patch managed 块" + warnSuffix)
+			result.Detail = detail("would update dsh cordis patch managed block" + warnSuffix)
 			return result, "", nil
 		}
 		result.Status = "missing"
@@ -403,18 +403,18 @@ func syncDshMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropp
 	if err := writeFileAtomic(target.Path, next, writePerm); err != nil {
 		return result, backup, err
 	}
-	result.Detail = detail("dsh cordis patch managed 块" + warnSuffix)
+	result.Detail = detail("dsh cordis patch managed block" + warnSuffix)
 
 	if profile, ok := dshValidatePatch(); !ok {
 		restoreErr := writeFileAtomic(target.Path, existing, writePerm)
 		if restoreErr != nil {
-			return result, backup, fmt.Errorf("dsh patch 写入后 dsh 自检失败，且回滚失败（备份在 %s）：%v", backup, restoreErr)
+			return result, backup, fmt.Errorf("dsh patch failed the dsh self-check after write, and rollback failed (backup at %s): %v", backup, restoreErr)
 		}
 		result.Status = "blocked"
-		result.Detail = detail("dsh 自检（dump-config) 失败，已按备份回滚；把报错发来再修")
+		result.Detail = detail("dsh self-check (dump-config) failed; rolled back from backup. Send the failure output for a fix")
 		return result, backup, nil
 	} else if profile != "" {
-		result.Detail = detail("dsh cordis patch managed 块（已用 " + profile + " profile 自检通过）" + warnSuffix)
+		result.Detail = detail("dsh cordis patch managed block (self-checked with the " + profile + " profile)" + warnSuffix)
 	}
 	return result, backup, nil
 }

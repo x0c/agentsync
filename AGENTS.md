@@ -35,7 +35,7 @@ agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文�
 
 - Go 1.25+，默认仅使用 Go 标准库。MCP 配置同步额外允许 TOML（`github.com/pelletier/go-toml/v2`）和 YAML（`gopkg.in/yaml.v3`）；JSONC 由本仓自行剥注释后按 JSON 处理。
 - 单 binary CLI，入口为 `main.go`，核心实现位于 `internal/agentsync/`。
-- CLI 输出、错误信息和新增注释按本地规范使用中文；已有英文用户输出属于当前公开接口，改动前需要同步评估 README 与测试。
+- CLI 输出、错误信息和新增注释默认英文（English-first；2026-09-23 用户裁定，覆盖此前中文输出规则）：用户可见字符串禁止中英混杂。改动已有英文用户输出前需要同步评估 README 与测试。
 - 默认优先创建 symlink；Windows 或不支持 symlink 的场景会退化为 hardlink 或受管副本。
 - 修改默认路径、别名策略、备份策略、Skill 同步策略、MCP 同步策略、`sync-policy.json` 语义或命令参数时，必须同步更新本文档、`README.md`、`README.zh-CN.md` 和 `docs/` 对应文档。
 - 测试必须使用隔离配置目录，避免向真实 `~/.config/agentsync/backups/` 写测试备份。

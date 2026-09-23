@@ -499,13 +499,17 @@ func appendNewline(data []byte) []byte {
 
 func mcpNoticeText() string {
 	return mcpNoticeBegin + "\n" +
-		"## MCP 配置\n\n" +
-		"MCP 服务器的唯一源是本机 `~/.config/agentsync/mcp.json`（含 token，不进 git / Syncthing；与本文件、`skills/` 平级）。" +
-		"新增、修改或删除 MCP 时只改那份 JSON，不要改各工具自己的 MCP 配置" +
-		"（例如 `~/.claude.json`、`~/.cursor/mcp.json`、`~/.codex/config.toml`）。" +
-		"运行 `agentsync` 后，已安装工具的用户级 MCP 入口会按各自 schema 被覆盖为统一源中的服务器集合。" +
-		"按工具裁剪（例如某个 Agent 不要某个服务器）写在同目录的 `sync-policy.json`，不要改各工具自己的 MCP 文件。" +
-		"`agentsync --watch` 只从统一源单向写出；工具 UI 里加的服务器不会自动拉回。\n" +
+		"## MCP configuration\n\n" +
+		"The single source of truth for MCP servers is `~/.config/agentsync/mcp.json` on this machine " +
+		"(contains tokens; keep it out of git / Syncthing; it sits next to this file and `skills/`). " +
+		"To add, change, or remove an MCP server, edit only that JSON — never each tool's own MCP config " +
+		"(e.g. `~/.claude.json`, `~/.cursor/mcp.json`, `~/.codex/config.toml`). " +
+		"Running `agentsync` overwrites installed tools' user-level MCP entries with the canonical server set, " +
+		"translated per tool schema. " +
+		"Per-tool trimming (e.g. keeping a server out of one agent) goes in `sync-policy.json` in the same directory, " +
+		"not in each tool's MCP file. " +
+		"`agentsync --watch` only writes outward from the canonical source; " +
+		"servers added in a tool's UI are never pulled back.\n" +
 		mcpNoticeEnd
 }
 
