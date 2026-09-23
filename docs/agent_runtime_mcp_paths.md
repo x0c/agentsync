@@ -107,6 +107,7 @@ flowchart LR
 | JoyCode | `~/.joycode` | `~/.joycode/joycode-mcp.json` | file | `mcpServers`；**禁止为 MCP 创建** `~/.joycode`（会挡住旧目录迁移） | 做 |
 | Pi | `~/.pi/agent` | `~/.config/mcp/mcp.json` | file | `mcpServers`（标准共享全局配置，见下方 Pi 小节） | 做 |
 | Pi | `~/.pi/agent` | `~/.config/mcp/mcp.json` | file | `mcpServers`（pi-mcp-adapter 扩展读共享全局配置，优先级最高） | 做 |
+| dsh | `~/.dsh` | — | — | MCP 是 `cordis.patch.yml` 里的插件实例，无独立 `mcp.json`；agentsync 不写 patch 文件（见 §3 dsh 小节） | **跳过** |
 
 Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\settings.json`；Crush `%LOCALAPPDATA%\crush\crush.json`；Goose `%APPDATA%\Block\goose\config\config.yaml`；Zed `%APPDATA%\Zed\settings.json`。
 
@@ -146,6 +147,13 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 - 用户级：`~/.joycode/joycode-mcp.json`（JoyCoder.joycoder-fe 3.8.67 源码硬编码）。项目级是仓库 `.joycode/mcp.json`，不同步。
 - 旧路径 `~/.joycoder/joycoder-mcp.json` 仅在「还没有 `.joycode`」时由扩展自己迁移。agentsync **不得先建空** `~/.joycode`。
 - 官方 MCP 教程页仍只写 UI；官方案例页 `~/.josycoder/joycoder-mcp.json` 是拼写错误 + 旧文件名，不可采信。
+
+### dsh（DeepSeek Harness，`@deepseek-ai/dsh`）
+
+- **MCP 首发跳过，但机制是明确的**：dsh 没有独立 `mcp.json`，一个 MCP server 就是 `cordis.patch.yml` 里一个 `@deepseek-ai/dsh-mcp-client` 插件实例（`id: mcp-<名>` + `config.serverName/transport/command/args/env/url/headers`）。加载顺序：官方 bundle 默认 → `$DSH_HOME/profiles/<名>/cordis.patch.yml` → `$DSH_HOME/cordis.patch.yml`（全 profile 共用）→ `--patch` 覆盖。用户一般在 `~/.dsh/profiles/web/cordis.patch.yml` 里加 server，且须先 `dsh plugin --profile web add @deepseek-ai/dsh-mcp-client` 把 client 包进 profile 依赖，否则 patch 引用起不来。
+- **agentsync 不写 patch 文件**：往 `cordis.patch.yml` 里合并等同改 profile 组成——文件里常见 `!!js process.env.X` 这类自定义 tag，YAML 回写极易弄坏；且目标机器 profile 若没装 `dsh-mcp-client` 依赖，写进去会直接导致 `dsh web` 无法启动。两条都是不可逆风险，所以只同步规范与 Skill，MCP 留给用户手写 patch。
+- **不要碰社区插件的状态文件**：`dsh-mcp-manager` 的 `~/.dsh/mcp-manager.json` 存 OAuth token 明文（机密），工作区 `<workspace>/.dsh/dshmm/mcp.json` 是项目级作用域；`dsh-client-ui-settings-mcp` 的 `$DSH_HOME/ui-settings-mcp.json` 是另一套私有 schema。三者都不是官方契约，agentsync 一律不读写。
+- 规范入口（`~/.dsh/AGENTS.md`）与 Skill 入口（`~/.dsh/skills/`，另有已收敛的通用 `~/.agents/skills/`）正常同步，见 [agent_runtime_global_paths.md](agent_runtime_global_paths.md)。
 
 ### Pi（earendil-works/pi）
 

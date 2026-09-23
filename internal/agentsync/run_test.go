@@ -432,6 +432,19 @@ func TestDefaultGlobalConfigIncludesJoyCode(t *testing.T) {
 	}
 }
 
+func TestDefaultGlobalConfigIncludesDsh(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".dsh", "AGENTS.md")) {
+		t.Fatalf("dsh 规范入口缺失: %+v", cfg.Targets)
+	}
+	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".dsh", "skills")) {
+		t.Fatalf("dsh Skill 入口缺失: %+v", cfg.SkillTargets)
+	}
+}
+
 func TestDefaultGlobalConfigIncludesCursor(t *testing.T) {
 	cfg, err := defaultGlobalConfig()
 	if err != nil {

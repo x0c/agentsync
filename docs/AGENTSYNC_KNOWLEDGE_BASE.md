@@ -25,9 +25,9 @@ agentsync 的同步机制围绕“统一源”和“工具入口”展开。统�
 - 规范统一源：`~/.config/agentsync/AGENTS.md`。
 - Skill 统一源：`~/.config/agentsync/skills`。
 - MCP 统一源：`~/.config/agentsync/mcp.json`。
-- 规范目标入口：Codex、OpenCode、Claude Code、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等工具的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。完整清单见 `defaultGlobalConfig()`。Cursor 为 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`）。
+- 规范目标入口：Codex、OpenCode、Claude Code、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、dsh（DeepSeek Harness）、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等工具的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。完整清单见 `defaultGlobalConfig()`。Cursor 为 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`）。
 - Skill 目标入口：各工具的用户 skill 根目录。
-- MCP 目标入口：各已安装工具的用户级 MCP 配置（独立文件整段覆盖，或综合配置只改 MCP key）。iFlow 与 `~/.agents` 无 MCP 入口。完整清单与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
+- MCP 目标入口：各已安装工具的用户级 MCP 配置（独立文件整段覆盖，或综合配置只改 MCP key）。iFlow、dsh 与 `~/.agents` 无 MCP 入口。完整清单与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
 - 安装门控（Detect）：每个规范/Skill/MCP 入口都带一个 `Detect` 标志目录，取该工具的用户级主目录（如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，`syncTarget()` / `syncSkillRoot()` / `syncMCPTarget()` 直接返回 `skipped`，不创建任何目录或文件。这样一台机器上只会为真正装了的工具建立入口。
 - 仓库级源：当前 Git 仓库的 `AGENTS.md`。
 - 仓库级目标：当前 Git 仓库的 `CLAUDE.md`。

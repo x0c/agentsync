@@ -228,7 +228,7 @@ Example — keep tavily out of Codex:
 }
 ```
 
-On global `agentsync` (not `--repo` / `--all`), `mcp.json` is translated into each installed runtime's user-level MCP config after applying `sync-policy.json`. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow is skipped. `~/.agents` has no MCP entry. Codex bundled local servers (`node_repl`, `computer-use`) stay on Codex only. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. `mcp.json` is machine-local (tokens, host paths) and is added to `.gitignore` / `.stignore` when the config directory is a git repo or Syncthing folder. Do not sync it across machines.
+On global `agentsync` (not `--repo` / `--all`), `mcp.json` is translated into each installed runtime's user-level MCP config after applying `sync-policy.json`. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow and dsh are skipped. `~/.agents` has no MCP entry. Codex bundled local servers (`node_repl`, `computer-use`) stay on Codex only. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. `mcp.json` is machine-local (tokens, host paths) and is added to `.gitignore` / `.stignore` when the config directory is a git repo or Syncthing folder. Do not sync it across machines.
 
 
 </details>

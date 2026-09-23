@@ -36,6 +36,7 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.iflow/IFLOW.md", Mode: "link", Detect: "~/.iflow"},
 		{Path: "~/.config/kilo/AGENTS.md", Mode: "link", Detect: "~/.config/kilo"},
 		{Path: "~/.pi/agent/AGENTS.md", Mode: "link", Detect: "~/.pi/agent"},
+		{Path: "~/.dsh/AGENTS.md", Mode: "link", Detect: "~/.dsh"},
 		// IDE / 编辑器系 Agent
 		{Path: "~/.cursor/rules/AGENTS.mdc", Mode: "cursor", Detect: "~/.cursor"},
 		{Path: "~/.codeium/windsurf/memories/global_rules.md", Mode: "link", Detect: "~/.codeium/windsurf"},
@@ -72,6 +73,7 @@ func defaultGlobalConfig() (Config, error) {
 		{Name: "qoder", Path: "~/.qoder/skills", Detect: "~/.qoder"},
 		{Name: "kiro", Path: "~/.kiro/skills", Detect: "~/.kiro"},
 		{Name: "joycode", Path: "~/.joycode/skills", Detect: "~/.joycode"},
+		{Name: "dsh", Path: "~/.dsh/skills", Detect: "~/.dsh"},
 		// 通用跨工具入口（Pi 等走 ~/.agents/skills）
 		{Name: "agents", Path: "~/.agents/skills", Detect: "~/.agents"},
 	}

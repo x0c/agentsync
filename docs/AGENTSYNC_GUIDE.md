@@ -55,7 +55,7 @@ flowchart TD
 | MCP 统一源 | `~/.config/agentsync/mcp.json` | 所有已安装工具共享的 MCP 服务器集合 |
 | 同步策略 | `~/.config/agentsync/sync-policy.json` | 可选；按工具裁剪写出的 MCP / Skill（不含 token） |
 
-规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
+规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、dsh（DeepSeek Harness）、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
 
 ```text
 规范入口：  ~/.codex/AGENTS.md、~/.claude/CLAUDE.md、~/.gemini/GEMINI.md、
