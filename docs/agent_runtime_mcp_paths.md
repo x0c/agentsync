@@ -170,6 +170,8 @@ Windows 差异（与 Detect 目录相同的工具从略）：Amp `%APPDATA%\amp\
 
 Sources: [Pi changelog](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md), [native MCP guide](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/mcp.md), [adapter v3 migration](https://github.com/nicobailon/pi-mcp-adapter/releases/tag/v3.0.0), [adapter config implementation](https://github.com/nicobailon/pi-mcp-adapter/blob/main/config.ts), [Pi package catalog](https://pi.dev/packages?name=pi-mcp-), [pi-mcp-extension](https://github.com/irahardianto/pi-mcp-extension).
 
+Local acceptance: automatic switching, explicit modes, policy filtering, read-only checks, native option preservation, custom agent roots, and watch changes passed isolated Go tests. On Pi 0.99.1, native MCP loaded the synchronized config and two read-only SDK tool calls succeeded. Native OAuth requires its own sign-in; no adapter credentials were migrated. LAN connectivity from an agent host remains subject to that host's OS permissions and was not fully verified. Full lint still reports four pre-existing unused helpers; incremental lint reports no new findings.
+
 Skills continue using the existing `~/.agents/skills` entry; no additional Pi skill alias is needed.
 
 ### 其余一次性钉死项

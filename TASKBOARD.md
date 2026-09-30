@@ -4,4 +4,3 @@
 
 | 任务 | 状态 | 影响范围 | 开始 | 最近更新 | 备注 |
 |---|---|---|---|---|---|
-| Pi native MCP and adapter compatibility | 验证中 | internal/agentsync/pi_mcp*, paths.go, mcp*.go, watch*, project docs; local Pi settings | 11:16 | 2026-09-30 11:28 | Race tests and incremental lint passed; native runtime acceptance next |
