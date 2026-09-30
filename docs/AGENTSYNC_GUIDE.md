@@ -68,7 +68,7 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
 
 第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态，未装的工具显示 `skipped`。第二次运行已安装工具应收敛到 `ok`，这是幂等性判断的主要用户信号。
 
-全局模式还会把 `mcp.json` 翻译写入已安装工具的用户级 MCP 配置，并在 `AGENTS.md` 注入「只改统一源」说明。可用 `sync-policy.json` 按工具排除或白名单某些 MCP / Skill（统一源仍是全集）。仓库模式与 `--all` 不同步 MCP。落点与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
+全局模式还会把 `mcp.json` 翻译写入已安装工具的用户级 MCP 配置，并在 `AGENTS.md` 注入「只改统一源」说明。可用 `sync-policy.json` 按工具排除或白名单某些 MCP / Skill（统一源仍是全集）。仓库模式与 `--all` 不同步 MCP。 Pi uses native MCP by default; an enabled `pi-mcp-adapter` selects the shared adapter config. Optional top-level `piMCP` in `sync-policy.json` can force `native` or `adapter` (default `auto`). The watcher notices Pi settings and extension changes; it never installs/removes packages or renames old configs.落点与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
 
 示例：让 Codex 不同步 tavily，其它工具照常：
 

@@ -14,6 +14,7 @@ type SyncPolicy struct {
 	Version int            `json:"version"`
 	MCP     ResourcePolicy `json:"mcp"`
 	Skills  ResourcePolicy `json:"skills"`
+	PiMCP   string         `json:"piMCP,omitempty"` // auto (default), native, or adapter
 }
 
 // ResourcePolicy controls which MCP server / skill names are written to a target.
@@ -45,6 +46,12 @@ func loadSyncPolicy(path string) (SyncPolicy, error) {
 	var pol SyncPolicy
 	if err := json.Unmarshal(data, &pol); err != nil {
 		return SyncPolicy{}, fmt.Errorf("parse sync policy %s: %w", path, err)
+	}
+	pol.PiMCP = strings.ToLower(strings.TrimSpace(pol.PiMCP))
+	switch pol.PiMCP {
+	case "", "auto", "native", "adapter":
+	default:
+		return SyncPolicy{}, fmt.Errorf("sync policy piMCP must be auto, native or adapter, got %q", pol.PiMCP)
 	}
 	if err := validateResourcePolicy("mcp", pol.MCP); err != nil {
 		return SyncPolicy{}, err

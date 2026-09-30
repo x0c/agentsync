@@ -231,6 +231,8 @@ Cursor 入口是带 `alwaysApply: true` frontmatter 的受管 `.mdc`（不是裸
 全局模式（不是 `--repo` / `--all`）会先应用 `sync-policy.json`，再把 `mcp.json` 按各已安装工具的 schema 写进用户级 MCP 入口。`~/.claude.json`、`~/.codex/config.toml` 这类混杂热文件只改 MCP 那个 key；`~/.cursor/mcp.json` 这类独立 MCP 文件整段覆盖。不同步 iFlow，也不为 `~/.agents` 造 MCP 入口。Codex 捆绑的本机服务器（`node_repl`、`computer-use`）只留在 Codex。请只改统一源——agentsync 会在 `~/.config/agentsync/AGENTS.md` 里注入提醒。`mcp.json` 是本机文件（常有 token 和本机路径），配置目录若是 git 仓库或 Syncthing 文件夹，会写入 `.gitignore` / `.stignore`。不要默认同步到其他机器。
 
 
+Pi 默认使用内置 MCP（需要 Pi 0.99+）。配置中启用了 `pi-mcp-adapter` 时，agentsync 继续同步共享配置，以兼容旧版 Pi。在 `sync-policy.json` 顶层设置 `"piMCP": "native"` 或 `"adapter"` 可覆盖自动选择（默认 `"auto"`）。每次只管理一个输出，保留 adapter 专属设置。`mcp-adapter.json` 迁移说明见 [Pi MCP 兼容](docs/agent_runtime_mcp_paths.md#pi-earendil-workspi)。
+
 </details>
 
 ## 常见问题

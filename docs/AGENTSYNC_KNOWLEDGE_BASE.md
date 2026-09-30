@@ -122,6 +122,8 @@ flowchart LR
 6. 配置根若有 `.git`，补 `.gitignore`；若有 `.stfolder`，补 `.stignore`。两份都忽略 `mcp.json`、`backups/`、`merge-drafts/`（策略文件可同步，不强制 ignore）。
 7. 空文件或缺少 `mcpServers` 对象的统一源直接报错，不覆盖目标。`--watch` 遇到空集合且已安装工具仍有服务器时拒绝写出。
 
+Pi keeps the stable policy key `pi`. Optional top-level `piMCP` in `sync-policy.json` selects `auto` (default), `native`, or `adapter`; invalid values fail validation. In automatic mode, each sync selects native MCP unless an enabled `pi-mcp-adapter` package/extension is found. Native updates preserve top-level settings and server `exposure`, `toolExposure`, `oauth`, `timeout`, and `enabled`; removed servers still disappear. Adapter-owned files are untouched. See [MCP paths](agent_runtime_mcp_paths.md#pi-earendil-workspi) for migration and compatibility limits.
+
 仓库模式的 `repoConfig()` 不填 `MCPSource`，因此 `--repo` / `--all` 不会动用户级 MCP。落点与转换规则以 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md) 为准。
 
 ### 仓库级收敛

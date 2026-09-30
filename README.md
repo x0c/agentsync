@@ -231,6 +231,8 @@ Example — keep tavily out of Codex:
 On global `agentsync` (not `--repo` / `--all`), `mcp.json` is translated into each installed runtime's user-level MCP config after applying `sync-policy.json`. Mixed files such as `~/.claude.json` and `~/.codex/config.toml` are key-merged so OAuth and other settings stay put; dedicated MCP files such as `~/.cursor/mcp.json` are replaced as a whole. iFlow is skipped. `~/.agents` has no MCP entry. Codex bundled local servers (`node_repl`, `computer-use`) stay on Codex only. Edit the canonical file only — agentsync injects a reminder into `~/.config/agentsync/AGENTS.md`. `mcp.json` is machine-local (tokens, host paths) and is added to `.gitignore` / `.stignore` when the config directory is a git repo or Syncthing folder. Do not sync it across machines.
 
 
+Pi uses built-in MCP by default (Pi 0.99+). If an enabled `pi-mcp-adapter` is configured, agentsync keeps using its shared config for compatibility with older Pi versions. Set top-level `"piMCP": "native"` or `"adapter"` in `sync-policy.json` to override automatic selection (default `"auto"`). Only one output is managed; adapter settings are preserved. See [Pi MCP compatibility](docs/agent_runtime_mcp_paths.md#pi-earendil-workspi) for the `mcp-adapter.json` migration.
+
 </details>
 
 ## FAQ

@@ -27,6 +27,7 @@ type watchSnapshot struct {
 	Skills string
 	Policy string
 	Detect string
+	Pi     string
 }
 
 func (a watchSnapshot) equal(b watchSnapshot) bool {
@@ -34,7 +35,7 @@ func (a watchSnapshot) equal(b watchSnapshot) bool {
 }
 
 func watchSkipMCP(prev, next watchSnapshot) bool {
-	return prev.MCP == next.MCP && prev.Detect == next.Detect && prev.Policy == next.Policy
+	return prev.MCP == next.MCP && prev.Detect == next.Detect && prev.Policy == next.Policy && prev.Pi == next.Pi
 }
 
 func runWatch(opts Options) error {
@@ -180,6 +181,19 @@ func watchSnapshotOf(cfg Config) (watchSnapshot, error) {
 		return watchSnapshot{}, err
 	}
 	snap.Detect = detectFingerprint(cfg)
+	for _, target := range cfg.MCPTargets {
+		if target.Dialect == "pi-auto" {
+			settings, err := pathFingerprint(filepath.Join(target.Detect, "settings.json"))
+			if err != nil {
+				return watchSnapshot{}, err
+			}
+			extensions, err := skillsFingerprint(filepath.Join(target.Detect, "extensions"))
+			if err != nil {
+				return watchSnapshot{}, err
+			}
+			snap.Pi = settings + extensions
+		}
+	}
 	return snap, nil
 }
 

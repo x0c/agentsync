@@ -25,6 +25,10 @@ func syncMCP(cfg Config, opts Options) ([]TargetResult, []string, error) {
 	if err != nil {
 		return results, backups, err
 	}
+	cfg, err = resolvePiMCPConfig(cfg, policy.PiMCP)
+	if err != nil {
+		return results, backups, err
+	}
 	results = append(results, policyWarningResults(cfg.PolicyPath, policy, cfg.MCPTargets, nil)...)
 
 	servers, sourceResult, err := ensureMCPSource(cfg, opts)
@@ -228,6 +232,9 @@ func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropped 
 		result.Detail = formatFilteredDetail("mcp config", dropped)
 	}
 	perm := os.FileMode(0o644)
+	if target.Dialect == "pi" {
+		perm = 0o600
+	}
 	if existingMode != 0 {
 		perm = existingMode
 	}

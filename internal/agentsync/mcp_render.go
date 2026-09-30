@@ -8,6 +8,8 @@ import (
 func renderMCPPayload(dialect string, servers []mcpServer) (any, error) {
 	servers = filterServersForDialect(servers, dialect)
 	switch dialect {
+	case "pi":
+		return renderPi(servers)
 	case "cursor", "claude":
 		return marshalCanonicalMap(normalizeCursor(servers)), nil
 	case "windsurf":

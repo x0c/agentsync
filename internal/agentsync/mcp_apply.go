@@ -26,6 +26,11 @@ func applyMCPToFile(target MCPTarget, existing []byte, servers []mcpServer) ([]b
 }
 
 func applyMCPJSON(target MCPTarget, existing []byte, payload any) ([]byte, error) {
+	if target.Dialect == "pi" {
+		if err := preservePiServerOptions(existing, payload); err != nil {
+			return nil, err
+		}
+	}
 	if target.Mode == "file" {
 		wrapper := map[string]any{"mcpServers": payload}
 		out, err := json.MarshalIndent(wrapper, "", "  ")
