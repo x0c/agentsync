@@ -220,7 +220,7 @@ goreleaser check
 文档-only 改动执行：
 
 ```bash
-python3 /home/vibecoder/.config/agentsync/skills/doc-init/scripts/doc_nav_lint.py --root .
+python3 ~/.config/agentsync/skills/doc-init/scripts/doc_nav_lint.py --root .
 ```
 
 没有 HTTP 端口或本地数据库。可选的 `--watch` 用用户级 systemd/launchd 常驻，模板在 `contrib/`，不单独写 `OPERATIONS_GUIDE.md`。运行验证主要是 CLI 冒烟、测试，以及（若已 enable）确认 watch 服务用的是刚装的二进制。

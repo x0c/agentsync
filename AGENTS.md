@@ -1,16 +1,16 @@
 <!-- managed:inherited-agents:start -->
-<!-- source: /Users/geraltgraham/Codes/AgentSync/AGENTS.md -->
+<!-- source: ~/Codes/AgentSync/AGENTS.md -->
 # AgentSync
 
 Agent 全局规范与 Skill 同步 CLI，管理 `~/.config/agentsync/` 中的 skills 和知识库。
 
 > **仓库根在 `cli/`,不在本目录**。git 仓库、Go module、`.goreleaser.yml`、发布 workflow 全部位于 `cli/`;在本目录(`AgentSync/`)直接跑 `git`/`go` 会报 `not a git repository`。所有 git、构建、测试、发布操作都要先进 `cli/`。本目录只是工作区容器,自身不受版本管理。
 
-通用工程规范：[Go 规范](../_standards/go.md)
+通用工程规范：[Go 规范](~/Codes/_standards/go.md)
 
 ## 文档导航
 
-- [cli/AGENTS.md](cli/AGENTS.md)：改、评审或发布 agentsync CLI 工具前必读。Remote：`https://github.com/x0c/agentsync.git`
+- [cli/AGENTS.md](~/Codes/AgentSync/cli/AGENTS.md)：改、评审或发布 agentsync CLI 工具前必读。Remote：`https://github.com/x0c/agentsync.git`
 
 <!-- managed:inherited-agents:end -->
 
