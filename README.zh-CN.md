@@ -185,7 +185,7 @@ Cursor 入口是带 `alwaysApply: true` frontmatter 的受管 `.mdc`（不是裸
 ~/.config/agentsync/skills/<skill-name>/SKILL.md
 ```
 
-工具侧 Skill 入口（仅在对应工具已安装时创建）。默认整体指向 `~/.config/agentsync/skills`；若 `sync-policy.json` 对该工具过滤了 Skill，则改为真实目录 + 允许 skill 的子软链：
+工具侧 Skill 入口（仅在对应工具已安装时创建）。默认整体指向 `~/.config/agentsync/skills`；若 `sync-policy.json` 对该工具过滤了 Skill，则改为真实目录 + 允许 skill 的子软链（Codex 还会读取 `~/.agents/skills`，要对 Codex 彻底隐藏某个 skill，还需在 `~/.codex/config.toml` 写 `[[skills.config]] name = "<skill>"`、`enabled = false`）：
 
 ```text
 ~/.claude/skills          ~/.config/amp/skills

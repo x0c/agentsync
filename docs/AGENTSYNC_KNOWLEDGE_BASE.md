@@ -211,6 +211,8 @@ CLAUDE.md -> AGENTS.md
 - **AI 易错点**【先导入再替换】替换现有规范文件或 Skill 目录前，必须先把可保留内容导入统一源或写入备份；不能为了“简化”直接删除目标入口。
 - **AI 易错点**【Skill 根目录策略】无 skills 策略过滤时，工具侧 Skill 入口是整个根目录指向统一源。有有效过滤时改为真实目录 + 允许 skill 的子软链；切回全集时恢复根软链。不要把「永远逐个 skill 链接」当成默认——无过滤时回退到逐个链接会重新引入删除/重命名不同步问题。
 - **AI 易错点**【sync-policy 与密钥分离】按工具裁剪写在 `sync-policy.json`，不要塞进 `mcp.json`。统一源始终是全集；deny 掉的服务器会从该工具配置里消失（不是写成 disabled）。策略不参与并集导入。
+- **AI 易错点**【Codex 的 Skill 过滤不完整】Codex 同时读取 `$CODEX_HOME/skills` 和 `~/.agents/skills`（源码 `codex-rs/ext/skills/src/host_roots.rs`）。`sync-policy.json` 的 `skills.targets.codex.deny` 只过滤前者，而 `~/.agents/skills` 默认整体软链到统一源，所以被 deny 的 skill 仍会出现在 Codex 里。要真正对 Codex 隐藏，还要在 `~/.codex/config.toml` 加 `[[skills.config]] name = "<skill>"` + `enabled = false`（Codex ≥ 0.159 支持按名选择）。2026-10-01 对 `gpt-image` 实测：只做 deny 不够，加上 config 后 `codex exec` 列出的 skill 中不再有它。
+- **AI 易错点**【过滤根里的隐藏目录只复制一次】`materializeFilteredSkillRoot()` 在目标已存在同名隐藏目录时跳过，所以过滤后的工具根里的 `.system` 是物化当时的一次性副本：之后修改统一源 `skills/.system/` 不会传到该工具，Codex 自己升级时也只改这份副本。改了统一源的 `.system` 文件后，要手动复制到 `~/.codex/skills/.system/`，或删掉该副本让下次同步重新复制。
 - **AI 易错点**【隐藏 Skill 目录】以点开头的隐藏 Skill 目录不参与普通 skill 发现，但要通过 `preserveHiddenSkillEntries()` 复制到统一源。过滤物化时也要从统一源复制隐藏目录。忽略它会丢掉 Codex `.system` 这类工具内部 skill。
 - **AI 易错点**【统一源内 symlink 物化】统一 Skill 源中普通 skill 如果是 symlink，需通过 `materializeCanonicalSkillLinks()` 变成真实目录，否则工具侧根目录统一后仍可能指向外部不稳定路径。
 - 【仓库模式边界】`--repo` 和 `--all` 只处理仓库内 `CLAUDE.md -> AGENTS.md`；不要让它们改用户级 `~/.config/agentsync/AGENTS.md`、Skill 根目录或 MCP 配置。
@@ -319,6 +321,7 @@ goreleaser check
 - 数据库证据：本仓无数据库配置，未执行数据库 catalog。
 - Q&A 补充：缺少用户经验输入；§6 的低置信度条目需要后续真实使用经验补齐。
 - 待补充：发布与安装链路、测试隔离与安全验证已登记到根 `AGENTS.md` backlog。
+- 环境改进待办（2026-10-01）：对 Codex 的 skill deny 应同时写出 `~/.codex/config.toml` 的 `[[skills.config]] enabled = false`（键级合并，与 MCP 同法），并在统一源隐藏目录变化时刷新过滤根里的副本；在此之前按 §6 两条易错点手动处理。
 
 <!-- 该文档由 doc-init 更新于 2026-06-30；定位：AI 修改 agentsync 同步机制前的快速参考文档 -->
 

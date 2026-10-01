@@ -185,7 +185,7 @@ Canonical skill directory:
 ~/.config/agentsync/skills/<skill-name>/SKILL.md
 ```
 
-Tool-specific skill aliases (created only when the runtime is installed). By default each points at `~/.config/agentsync/skills`. If `sync-policy.json` filters skills for that runtime, the tool root becomes a real directory of per-skill symlinks instead:
+Tool-specific skill aliases (created only when the runtime is installed). By default each points at `~/.config/agentsync/skills`. If `sync-policy.json` filters skills for that runtime, the tool root becomes a real directory of per-skill symlinks instead (Codex also reads `~/.agents/skills`, so hiding a skill from Codex additionally needs `[[skills.config]] name = "<skill>"`, `enabled = false` in `~/.codex/config.toml`):
 
 ```text
 ~/.claude/skills          ~/.config/amp/skills
