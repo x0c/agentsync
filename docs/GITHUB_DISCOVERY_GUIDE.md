@@ -50,11 +50,29 @@ Pushing git does not update About, Topics, or Social preview. Re-run the same si
 
 ## 2026-09-14 storefront landing (Demo + Social preview asset, About/Topics frozen)
 
-- Added `docs/images/demo.gif` (check → sync → recheck, Codex + Claude entries; verbatim compacted from the README Quick start excerpt) and embedded it on the first screen of both READMEs below the badges. GIF is self-rendered, ~121KB / 33 frames — no fake UI, no stolen screenshots.
+- The initial `docs/images/demo.gif` used check → sync → recheck (Codex + Claude entries, ~121KB / 33 frames). This presentation was superseded by the one-command capture below on 2026-10-08.
 - Added `docs/images/social-preview.png` (1280×640, ~52KB, real terminal content) as the Social preview upload source. Upload itself is a web Settings action and is **not yet done**.
 - About/Topics intentionally **not** changed in this round: 09-13 day-2 retest showed ±20–40 rank drift on `sync claude cursor rules` (#60→#65); per growth-guide noise discipline, same-day re-editing is prohibited.
 - No homepage set: there is no docs site, and pointing it at a release page adds no discovery value. Do not fabricate one.
 - Verified: `go test ./...` + `go build ./...` pass; isolated-HOME `agentsync --check` / apply / recheck cycle behaves (`mergeable` → `merged` → `ok`, uninstalled runtimes `skipped`); README relative links resolve.
+
+## 2026-10-08 one-command presentation
+
+Both READMEs now lead with a single default invocation, `agentsync`, after installation. Optional commands occupy a short reference table; service setup, full target paths, policy examples, and detailed preservation behavior remain in the linked guides. The English and Chinese pages have the same structure, installation routes, and scope.
+
+The lead GIF records a real isolated Claude Code + Codex run with [VHS](https://github.com/charmbracelet/vhs). The capture entry point invokes the built CLI and displays selected verbatim result rows; it shortens the temporary home to `~` and omits source/import details, skipped tools, and lengthy backup filenames. Both the image and READMEs label it as an output excerpt. No successful result is fabricated, and the recorder checks preserved instructions, complete skill folders, links, backups, MCP conversion, and unrelated settings before showing output. It does not modify real agent configuration or start an MCP server.
+
+Regenerate from the repository root with Go, Python 3.9+, VHS, ttyd, and ffmpeg installed:
+
+```sh
+python3 scripts/record_demo.py --evidence /tmp/agentsync-demo-evidence
+```
+
+The [capture script](../scripts/record_demo.py) fills the [VHS tape](images/demo.tape) with temporary paths. `--output` can select a different GIF destination; `--evidence` retains the full report and displayed excerpt outside the repository. Inspect decoded final GIF frames for readable text, clipping, command visibility, duration, and looping. Capture dependencies are contributor tools, not requirements for using agentsync.
+
+The final GIF is 1040×440, 146 frames, 5.84 seconds, and 63,332 bytes, with an infinite loop. Decoded beginning, typing, result, and final frames were inspected; the command, excerpt label, and all six installed-tool result rows fit without wrapping or clipping.
+
+The older social-preview asset still shows the original multi-command flow and remains an unuploaded historical asset. It is not linked from either README.
 
 ## Reference review
 
@@ -86,3 +104,5 @@ Shallow clones or GitHub first screens of the following repositories were read b
 The v0.11.0 Linux amd64 release archive was downloaded and matched against its published SHA-256 checksum. Its binary completed preview, apply, and recheck in an isolated home with distinct Claude/Codex instructions; both instruction texts survived and both aliases resolved to the canonical source. English/Chinese command blocks match, relative README links resolve, and GitHub's Markdown API renders the tables and folded path reference. Existing macOS/Windows releases and the Homebrew cask were inspected; installation on those operating systems was not rerun in this documentation task.
 
 The 2026-09-12 storefront pass verified: Best Match ranks above; GitHub About description and topics via API; README English/Chinese first screens and FAQ disambiguation. It did not re-run the isolated binary install, and it does not claim improved rank until a later reindex measurement.
+
+The 2026-10-08 simplification passed repository text/link checks, Python check tests, Go race tests, build, vet, lint (zero issues), and GoReleaser validation with complete diagnostic output retained outside the repository. An isolated native macOS CLI run verified read-only preview, preserved original rules and skills, MCP import/conversion, unrelated-setting preservation, backups, all six installed entries reporting `ok` on recheck, and repository preview without global changes. GitHub's Markdown API rendered both READMEs, including both tables and the demo; command blocks match between languages. Decoded GIF frames provide motion/visual evidence. Browser automation surfaces were unavailable, so a complete GitHub page screenshot was not obtained. Linux/Windows execution is covered by the release workflow, not claimed as a local run. The existing Homebrew cask warning remains assessed in the [workflow guide](AGENTSYNC_GUIDE.md#retained-homebrew-compatibility-warning).

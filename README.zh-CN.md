@@ -2,267 +2,72 @@
 
 # agentsync
 
-**别再把 Cursor 规则手工抄进 Claude Code。**
+**一条命令，统一管理 AI 工具的规则、Skills 和 MCP 配置。**
 
-把 Claude Code 与 Cursor 的规则、技能和 MCP 配置同步到同一份源。同一条命令也覆盖 Codex、Gemini CLI 等你已经安装的 AI 编程助手。
+Claude Code、Codex、Cursor、Pi、OpenCode 等 20 多款工具，本机只维护一份配置。轻量，单个可执行文件。
 
 [![CI](https://github.com/x0c/agentsync/actions/workflows/ci.yml/badge.svg)](https://github.com/x0c/agentsync/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/x0c/agentsync)](https://github.com/x0c/agentsync/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![agentsync 检查、同步与复核演示](docs/images/demo.gif)
+![运行一次 agentsync，同步规则、Skills 和 MCP](docs/images/demo.gif)
 
-## 为什么用 agentsync？
-
-你写好一条 Cursor 规则，再粘贴进 Claude Code；加了一个技能或 MCP 服务器，又要逐个重配。几份副本很快就会分叉。
-
-这个命令行工具在本机只维护一份源，再同步到每个已安装的工具。它**不会**把项目里的 `.cursor/rules/*.mdc` 转成 `CLAUDE.md`，也**不是** npm 上那个同名 playground。
-
-| 你维护一次 | agentsync 同步 |
-| --- | --- |
-| `AGENTS.md` 全局指令 | 各工具的规范入口（Claude Code、Cursor、Codex 等） |
-| `skills/` 完整技能目录 | 共享技能正文、脚本与参考资料 |
-| `mcp.json` 服务器配置 | 各工具自己的 MCP 配置格式 |
-
-单个 Go 可执行文件，无需 Node.js 或 Python。替换前保留备份；未安装的工具会跳过。各工具支持的能力不同，详见下方路径清单。
-
-如果它让你少维护了几份配置，欢迎点个 Star，方便下次找到。
+*Claude Code 与 Codex 的真实运行演示；为便于阅读，仅展示部分输出。*
 
 ## 安装
 
-### macOS：Homebrew
+**macOS — Homebrew：**
 
-```bash
+```sh
 brew install --cask x0c/tap/agentsync
 ```
 
-### Linux / Windows / macOS：Go
-
-已安装 Go 1.25 或更新版本时，三个平台都可执行：
+**macOS / Linux / Windows — Go 1.25+：**
 
 ```sh
 go install github.com/x0c/agentsync@latest
 ```
 
-请将 Go 的安装目录（通常为 `~/go/bin`，Windows 为 `%USERPROFILE%\go\bin`）加入 PATH，重新打开终端。
+如有需要，将 Go 的可执行文件目录加入 PATH（通常为 `~/go/bin`；Windows 为 `%USERPROFILE%\go\bin`）。
 
-### 无需 Go：下载可执行文件
+**没有 Go：** 下载并解压 [Release 中的可执行文件](https://github.com/x0c/agentsync/releases/latest)，放到 PATH 中即可。支持 macOS 和 Linux（arm64 / amd64），以及 Windows（amd64），附带校验文件。
 
-从 [最新 Release](https://github.com/x0c/agentsync/releases/latest) 下载并解压对应文件，将 `agentsync`（Windows 为 `agentsync.exe`）放入 PATH 中的目录。同一页面提供 `checksums.txt` 校验文件。
+## 使用
 
-| 系统 | 已发布的架构 |
-| --- | --- |
-| macOS | Apple Silicon（arm64）、Intel（amd64） |
-| Linux | arm64、amd64 |
-| Windows | amd64（x64） |
-
-## 首次使用
-
-```bash
-agentsync --check  # 先预览，不修改文件
-agentsync          # 合并已有内容、备份并同步
-agentsync --check  # 检查已安装工具的入口
-agentsync --rollback latest  # 还原最近一次备份戳
+```sh
+agentsync
 ```
 
-此后只编辑 `~/.config/agentsync/` 中的源文件。规范和 Skill 优先通过链接共享；MCP 配置需要再次运行同步，或使用下方监听模式。
+就这一条。它会合并已有规则、收集完整的 Skill 文件夹，并导入 MCP 服务器配置，统一到一个公共目录，再为已安装的工具建立链接或写入对应格式的配置。替换前自动备份，未安装的工具自动跳过。
 
-下面是 Linux 上已发布版本的真实输出节选，临时用户目录缩写为 `~`：
+此后，只需维护 `~/.config/agentsync/` 中的这三项：
 
-```text
-$ agentsync --check
-  mergeable    ~/.codex/AGENTS.md (would merge unique content and replace with alias)
-  mergeable    ~/.claude/CLAUDE.md (would merge unique content and replace with alias)
-$ agentsync
-  merged       ~/.codex/AGENTS.md (content already present; symlink)
-  merged       ~/.claude/CLAUDE.md (content already present; symlink)
-$ agentsync --check
-  ok           ~/.codex/AGENTS.md (symlink)
-  ok           ~/.claude/CLAUDE.md (symlink)
-```
+| 文件 | 只维护一份的内容 |
+|---|---|
+| `AGENTS.md` | 全局规则 |
+| `skills/` | 完整的 Skill 文件夹，包含脚本与参考资料 |
+| `mcp.json` | MCP 服务器配置 |
 
-## 持续同步
+修改后再运行一次 `agentsync`，也可以使用下方的自动同步。
 
-不想每次手跑的话，开监听：
+## 按需使用
 
-```bash
-agentsync --watch
-```
+| 需求 | 命令 |
+|---|---|
+| 只预览，不修改文件 | `agentsync --check` |
+| 自动同步公共目录中的改动 | `agentsync --watch` |
+| 还原最近一次备份 | `agentsync --rollback latest` |
+| 将项目的 `CLAUDE.md` 链接到 `AGENTS.md` | `agentsync --repo` |
 
-它会轮询统一源 `AGENTS.md`、`mcp.json`、`skills/`、`sync-policy.json`，以及各工具主目录是否出现。改统一源或新装了一个 agent，就会自动把副本写回去。只改规范或 Skill、且策略未变时不会重写 MCP。MCP 配置不能软链接，所以靠这个保持同步。`--watch` 不能和 `--check`、`--repo`、`--all`、`--adopt`、`--rollback`、`--force` 一起用。
+后台服务、批量同步仓库、按工具过滤与备份详情，见 [使用指南](docs/AGENTSYNC_GUIDE.md)。
 
-Linux 可用 `contrib/systemd/agentsync.service`：
+## 几点说明
 
-```bash
-mkdir -p ~/.config/systemd/user
-cp contrib/systemd/agentsync.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now agentsync.service
-```
+- 默认管理**本机的全局配置**；项目文件使用单独的仓库模式。
+- 各工具支持的能力不同，详见 [规则与 Skill 支持](docs/agent_runtime_global_paths.md) 和 [MCP 支持](docs/agent_runtime_mcp_paths.md)。
+- 规则与 Skill 尽量使用链接；Cursor 使用受管的 `.mdc` 规则，Windows 可退回托管副本。另见 [Cursor 规则加载限制](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt)。
+- 请修改公共目录中的源文件。自动同步只向各工具写入，不会导入工具设置界面的改动。`mcp.json` 可能含令牌与本机路径，请保留在本机。
 
-macOS 可拷 `contrib/launchd/top.x0c.agentsync.plist`，把 `ProgramArguments` 改成 `$(which agentsync)` 的路径，再 `launchctl load`。
-
-## 仓库模式
-
-在 Git 仓库内执行：
-
-```bash
-agentsync --repo
-```
-
-该模式使用仓库内 `AGENTS.md` 作为源文件，并管理：
-
-```text
-CLAUDE.md -> AGENTS.md
-```
-
-批量处理目录下所有 Git 仓库：
-
-```bash
-agentsync --all ~/projects
-```
-
-## 安全策略
-
-- `--check` 只读。
-- 已有独特指令内容会先并入统一源文件，再创建软链接。
-- 已有 Skill 目录会先复制到统一 Skill 目录，再将工具侧 Skill 根目录替换成软链接。
-- MCP 服务器会先导入 `~/.config/agentsync/mcp.json`（同名时已安装工具按清单顺序先到先得，大小写不敏感），再按各工具 schema 覆盖已安装入口。可用可选的 `~/.config/agentsync/sync-policy.json` 按工具 deny / 白名单 MCP 或 Skill（统一源仍是全集）。Codex 捆绑的本机服务器不扩散到其他工具。`--repo` 与 `--all` 不同步 MCP。
-- 替换前的文件和目录会备份到 `~/.config/agentsync/backups/<戳>/`，并写入 `manifest.json` 以便还原。
-- 一键还原：`agentsync --rollback latest`（或指定如 `20260916-120412`）。可用 `--check --rollback latest` 预览。还原前会再备份当前文件，且不会自动再跑同步。
-- Codex `.system` 这类隐藏内部 Skill 目录会先保留到统一 Skill 根目录，再替换工具侧 Skill 根目录。
-- macOS 和 Linux 优先使用软链接。
-- Windows 优先尝试软链接，再尝试硬链接，最后退化为带标记的托管副本。
-
-## 只处理已安装的工具
-
-每个受支持的工具都用它自己的主目录（如 `~/.codex`、`~/.gemini`、`~/.joycode`）做安装判断。如果该目录不存在，agentsync 视为该工具**未安装**，报告为 `skipped`，绝不会为你没用的工具创建目录或入口文件。装了新工具后跑一次 `agentsync`（或开着 `--watch`）就会收敛。
-
-## 管理对象
-
-<details>
-<summary>展开规范、Skill 和 MCP 路径清单</summary>
-
-
-统一指令文件：
-
-```text
-~/.config/agentsync/AGENTS.md
-```
-
-工具侧指令入口（仅在对应工具已安装时创建）：
-
-```text
-~/.codex/AGENTS.md
-~/.config/opencode/AGENTS.md
-~/.claude/CLAUDE.md
-~/.gemini/GEMINI.md
-~/.qwen/QWEN.md
-~/.copilot/copilot-instructions.md
-~/.kimi-code/AGENTS.md
-~/.grok/AGENTS.md
-~/.config/amp/AGENTS.md
-~/.config/crush/CRUSH.md
-~/.config/goose/AGENTS.md
-~/.factory/AGENTS.md
-~/.iflow/IFLOW.md
-~/.config/kilo/AGENTS.md
-~/.pi/agent/AGENTS.md
-~/.cursor/rules/AGENTS.mdc
-~/.codeium/windsurf/memories/global_rules.md
-~/.config/zed/AGENTS.md
-~/.codebuddy/CODEBUDDY.md
-~/.qoder/AGENTS.md
-~/.junie/AGENTS.md
-~/.kiro/steering/AGENTS.md
-~/.joycode/AGENTS.md
-~/.agents/AGENTS.md
-```
-
-Cursor 入口是带 `alwaysApply: true` frontmatter 的受管 `.mdc`（不是裸 symlink）——Cursor 会忽略没有 frontmatter 的规则文件。若 Settings 已列出该规则但 Agent 会话复述不出正文，多半是 Cursor 在 home workspace / Agents Window 下未注入 file-backed 规则；请打开具体项目再试，或把关键段贴进 Settings → User Rules（详见 `docs/AGENTSYNC_GUIDE.md`）。
-
-统一 Skill 目录：
-
-```text
-~/.config/agentsync/skills/<skill-name>/SKILL.md
-```
-
-工具侧 Skill 入口（仅在对应工具已安装时创建）。默认整体指向 `~/.config/agentsync/skills`；若 `sync-policy.json` 对该工具过滤了 Skill，则改为真实目录 + 允许 skill 的子软链（Codex 还会读取 `~/.agents/skills`，要对 Codex 彻底隐藏某个 skill，还需在 `~/.codex/config.toml` 写 `[[skills.config]] name = "<skill>"`、`enabled = false`）：
-
-```text
-~/.claude/skills          ~/.config/amp/skills
-~/.codex/skills           ~/.config/crush/skills
-~/.config/opencode/skills ~/.factory/skills
-~/.qwen/skills            ~/.iflow/skills
-~/.copilot/skills         ~/.aider-desk/skills
-~/.kimi-code/skills       ~/.cursor/skills
-~/.grok/skills            ~/.codeium/windsurf/skills
-~/.codebuddy/skills       ~/.qoder/skills
-~/.kiro/skills            ~/.joycode/skills
-~/.agents/skills
-```
-
-每个 Skill 在统一 Skill 根目录下按完整目录管理。目录内必须包含 `SKILL.md`，旁边的脚本、模板、参考资料和资源文件会一起保留。无过滤时工具侧根目录整体指向统一根目录，新增、删除或重命名会立刻反映；有过滤时只暴露允许的 Skill。Pi 原生读 `~/.agents/skills/`，因此不建专属 Skill 别名。
-
-统一 MCP 配置：
-
-```text
-~/.config/agentsync/mcp.json
-```
-
-可选的按工具裁剪（不含 token，可跨机同步）：
-
-```text
-~/.config/agentsync/sync-policy.json
-```
-
-示例——让 Codex 不用 tavily：
-
-```json
-{
-  "version": 1,
-  "mcp": {
-    "default": "allow",
-    "targets": {
-      "codex": { "deny": ["tavily"] }
-    }
-  }
-}
-```
-
-全局模式（不是 `--repo` / `--all`）会先应用 `sync-policy.json`，再把 `mcp.json` 按各已安装工具的 schema 写进用户级 MCP 入口。`~/.claude.json`、`~/.codex/config.toml` 这类混杂热文件只改 MCP 那个 key；`~/.cursor/mcp.json` 这类独立 MCP 文件整段覆盖。不同步 iFlow，也不为 `~/.agents` 造 MCP 入口。Codex 捆绑的本机服务器（`node_repl`、`computer-use`）只留在 Codex。请只改统一源——agentsync 会在 `~/.config/agentsync/AGENTS.md` 里注入提醒。`mcp.json` 是本机文件（常有 token 和本机路径），配置目录若是 git 仓库或 Syncthing 文件夹，会写入 `.gitignore` / `.stignore`。不要默认同步到其他机器。
-
-
-Pi 默认使用内置 MCP（需要 Pi 0.99+）。配置中启用了 `pi-mcp-adapter` 时，agentsync 继续同步共享配置，以兼容旧版 Pi。在 `sync-policy.json` 顶层设置 `"piMCP": "native"` 或 `"adapter"` 可覆盖自动选择（默认 `"auto"`）。每次只管理一个输出，保留 adapter 专属设置。`mcp-adapter.json` 迁移说明见 [Pi MCP 兼容](docs/agent_runtime_mcp_paths.md#pi-earendil-workspi)。
-
-</details>
-
-## 常见问题
-
-**会修改我的项目吗？** 默认只处理用户级配置。当前项目的 `AGENTS.md` / `CLAUDE.md` 需要单独运行仓库模式。
-
-**只是建软链接吗？** 规范与技能会尽量用链接；MCP 则按工具格式转换，并保留混合配置文件中不相关的设置。完整的替换与备份规则见上方安全策略。
-
-**会跨电脑同步吗？** agentsync 负责本机工具之间的配置统一，不是云同步服务。MCP 文件可能含令牌和本机路径，应保留在本机。
-
-**适合团队规则生成吗？** 这个工具主要面向多助手用户的全局配置，仓库模式只管理 `CLAUDE.md` 入口。需要复杂的项目级规则生成时，可同时了解 [Ruler](https://github.com/intellectronica/ruler) 和 [Rulesync](https://github.com/dyoshikawa/rulesync)。
-
-**这是 npm 上那个 `agentsync` playground 吗？** 不是。本仓库是 Go 命令行工具 `x0c/agentsync`（Homebrew cask 为 `x0c/tap/agentsync`）。npm 包 `@panishandsome/agentsync` 及其浏览器 playground 是另一个项目。
-
-**发现问题或缺少工具支持？** [提交 Issue](https://github.com/x0c/agentsync/issues)，附上工具名称、系统和脱敏后的检查结果；请勿上传含令牌的 MCP 配置。支持路径与行为说明见 [使用指南](docs/AGENTSYNC_GUIDE.md)。
-
-## 开发
-
-开发需要 Go 1.25+，仓库检查需要 Python 3.9+。贡献规范与项目指南入口：[AGENTS.md](AGENTS.md)。
-
-```bash
-python3 scripts/check_repository.py
-python3 -m unittest discover -s scripts -p "test_*.py"
-go test -race ./...
-go build ./...
-go vet ./...
-```
-
-tag 发布由 GoReleaser 构建。发布 Homebrew cask 前，需要创建 `x0c/homebrew-tap` 仓库，并配置可推送该 tap 的 `HOMEBREW_TAP_GITHUB_TOKEN` secret。
+遇到问题或希望支持新工具？[提交 Issue](https://github.com/x0c/agentsync/issues)，附上工具名称、系统和脱敏输出。贡献规范见 [AGENTS.md](AGENTS.md)。
 
 ## 许可证
 
-MIT
+[MIT](LICENSE)
