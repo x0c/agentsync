@@ -2,6 +2,8 @@
 
 ## Product intent
 
+The owner clarified the first-use presentation on 2026-10-08: after installation, running `agentsync` once is the complete default workflow. Both READMEs and the lead demo must show that single command. Preview, recheck, rollback, watch mode, service setup, and detailed path catalogs are optional reference material, not required onboarding steps. Keep the main page concise, retain essential preservation and machine-local boundaries, and link to the existing guides for details. Capture the demo from a real isolated CLI run with no fabricated success output.
+
 The user selected agentsync for GitHub discovery and README improvements on 2026-09-09, and for need-first GitHub search SEO on 2026-09-12. Present its practical value to people who copy Cursor rules into Claude Code by hand and want one source for skills and MCP: maintain global instructions, complete skill folders, and MCP configuration together. Prioritize qualified visitors and successful first use; do not promise stars or claim that SEO alone establishes adoption. Do not rename the repository.
 
 ## Evidence and positioning

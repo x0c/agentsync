@@ -161,3 +161,9 @@ goreleaser release --clean --release-notes /path/to/reviewed-notes.md
 Use authenticated release/tap tokens from the environment without logging them. Run this only after the same tagged commit has passed the required platform validation and when the automated publisher is not publishing the same tag. This is the same packaging configuration used by CI; do not bypass failed validation or publish from a dirty tree.
 
 Long remote CI/publication waits may run in a traceable background process. Keep the run URL and completion log, and report pending outcomes accurately. A successful upload alone does not establish installability: validate the downloaded archive and installed command through preview, apply, and recheck.
+
+### Retained Homebrew compatibility warning
+
+Homebrew 7 reports `Calling postflight is deprecated` for the generated cask. The origin is GoReleaser's `homebrew_casks.hooks.post.install` wrapper, not agentsync's executable. The hook removes quarantine from the downloaded macOS binary. The v0.16.1 release passed archive checksum verification, Homebrew upgrade, installed-binary verification, and isolated preview -> apply -> recheck despite this warning.
+
+Retain this existing hook while its replacement is assessed; removing it can change whether an unsigned download runs. [Homebrew's cookbook](https://docs.brew.sh/Cask-Cookbook) temporarily supports legacy flight blocks in third-party taps. [GoReleaser's upstream issue](https://github.com/goreleaser/goreleaser/issues/6870) tracks its generated wrapper. Remaining risk: a future Homebrew release may remove the compatibility path. Follow up by migrating the release source to declarative steps, checking the supported Homebrew version range, Linux exclusion, sandboxed quarantine removal, and a real downloaded-binary install. A wrapper rename alone is insufficient, and editing the generated tap is overwritten by the next release.
