@@ -2,92 +2,64 @@
 <!-- source: ~/Codes/AgentSync/AGENTS.md -->
 # AgentSync
 
-Agent 全局规范与 Skill 同步 CLI，管理 `~/.config/agentsync/` 中的 skills 和知识库。
+Synchronize AI coding-agent instructions, complete skill folders, and MCP configurations from canonical user-owned sources.
 
-> **仓库根在 `cli/`,不在本目录**。git 仓库、Go module、`.goreleaser.yml`、发布 workflow 全部位于 `cli/`;在本目录(`AgentSync/`)直接跑 `git`/`go` 会报 `not a git repository`。所有 git、构建、测试、发布操作都要先进 `cli/`。本目录只是工作区容器,自身不受版本管理。
+The public Go module and Git repository are maintained in the `cli/` component. In a standalone clone, that component is the repository root: run Git and Go commands from the directory containing `go.mod`.
 
-通用工程规范：[Go 规范](~/Codes/_standards/go.md)
+## Documentation
 
-## 文档导航
-
-- [cli/AGENTS.md](~/Codes/AgentSync/cli/AGENTS.md)：改、评审或发布 agentsync CLI 工具前必读。Remote：`https://github.com/x0c/agentsync.git`
+- [Repository instructions](https://github.com/x0c/agentsync/blob/main/AGENTS.md): contribution rules, validation, and the project documentation index.
+- [Public repository](https://github.com/x0c/agentsync): installation, usage, source, and releases.
 
 <!-- managed:inherited-agents:end -->
 
-# agentsync 项目规范
+# Repository instructions
 
-agentsync 是一个 Go CLI，用于把多个 AI coding agent 的全局指令文件、项目级指令入口和 Skill 根目录收敛到统一源。项目核心价值是减少 Codex、Claude Code、OpenCode、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Pi、dsh（DeepSeek Harness）、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等众多工具之间的规范漂移，并保留替换前内容，避免一键收敛造成信息丢失。
+agentsync is a standalone Go CLI that aligns global agent instructions, complete skill directories, and MCP configuration.
 
-本仓是工具型项目，不按传统业务域拆文档；文档入口按用户工作流和命令能力组织。
+## Contribution rules
 
-## 项目定位
+- Use English for project instructions, contributor documentation, code comments, logs, errors, test diagnostics, CLI output, and generated notices. Keep `README.zh-CN.md` as a complete Chinese translation and retain the language switch in `README.md`. User-owned instructions and skill content keep their original language; agentsync does not translate them.
+- Keep contributor instructions usable from a standalone clone. Do not depend on a maintainer's home directory, private services, or external local documents. Do not publish credentials, personal absolute paths, private network addresses, or machine inventories.
+- Use Go 1.25 or newer. Prefer the standard library; TOML (`github.com/pelletier/go-toml/v2`) and YAML (`gopkg.in/yaml.v3`) are the existing MCP parsing exceptions. JSONC handling remains in this repository.
+- Keep command parsing in `main.go` and synchronization logic in `internal/agentsync/`. Preserve unrelated settings in mixed runtime configuration files.
+- Preserve existing user content before replacing files or directories. Keep `--check` read-only. Gate instruction, skill, and MCP targets on installed-runtime detection; do not create directories for absent runtimes.
+- Use isolated homes and configuration roots in tests. Never write test backups into a real user's configuration directory.
+- Changes to paths, backup/merge behavior, skill/MCP synchronization, policy semantics, or command flags require matching updates to the relevant guides and both READMEs.
+- Keep `CLAUDE.md` as the single line `@AGENTS.md`.
+- `TASKBOARD.md` lists active work only. Edit your own entry, keep its scope current, and remove it when complete; preserve other contributors' work.
 
-- 全局规范源：`~/.config/agentsync/AGENTS.md`
-- 全局 Skill 源：`~/.config/agentsync/skills/`
-- 全局 MCP 源：`~/.config/agentsync/mcp.json`（本机文件，常含 token，不进 git / Syncthing；按已安装 runtime 翻译后写入各自用户级 MCP 入口；不整文件 symlink 混杂热文件）
-- 同步策略：`~/.config/agentsync/sync-policy.json`（可选；按 runtime Name deny/白名单 MCP 与 Skill；统一源仍是全集；不含 token，可跨机）
-- 全局工具入口：覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、Pi、dsh（DeepSeek Harness）、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 各自的用户级规范文件，外加通用 `~/.agents/AGENTS.md`。完整清单与各自路径见 `internal/agentsync/paths.go` 的 `defaultGlobalConfig()`。Cursor 使用 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`，带 `alwaysApply` frontmatter 的受管副本，不是裸 symlink）。Pi uses `<Pi agent dir>/AGENTS.md` (`PI_CODING_AGENT_DIR`, default `~/.pi/agent`). Its MCP output selects native `mcp.json` or the adapter shared file from enabled package selection; see [MCP paths](docs/agent_runtime_mcp_paths.md). Skills continue using `~/.agents/skills/` without a separate Pi alias.
-- 全局 Skill 入口：上述工具各自的用户级 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.cursor/skills`、`~/.joycode/skills` 等），外加通用 `~/.agents/skills`。无策略过滤时整目录别名到统一源；有过滤时物化为允许 skill 的子软链。
-- **按安装门控**：每个入口都带一个 `Detect` 标志目录（该工具的用户级主目录，如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，同步时报告 `skipped`，绝不为未安装的工具创建任何目录或入口文件。新增 runtime 时必须同时给出正确的 `Detect`。MCP 入口同样按 Detect 门控；iFlow 的 MCP 不同步，`~/.agents` 无 MCP 入口。
-- 项目级入口：仓库内 `AGENTS.md` 与 `CLAUDE.md`
+## Validation and release
 
-## 技术栈与约束
+From the repository root, run:
 
-- Go 1.25+，默认仅使用 Go 标准库。MCP 配置同步额外允许 TOML（`github.com/pelletier/go-toml/v2`）和 YAML（`gopkg.in/yaml.v3`）；JSONC 由本仓自行剥注释后按 JSON 处理。
-- 单 binary CLI，入口为 `main.go`，核心实现位于 `internal/agentsync/`。
-- CLI 输出、错误信息和新增注释默认英文（English-first；2026-09-23 用户裁定，覆盖此前中文输出规则）：用户可见字符串禁止中英混杂。改动已有英文用户输出前需要同步评估 README 与测试。
-- 默认优先创建 symlink；Windows 或不支持 symlink 的场景会退化为 hardlink 或受管副本。
-- 修改默认路径、别名策略、备份策略、Skill 同步策略、MCP 同步策略、`sync-policy.json` 语义或命令参数时，必须同步更新本文档、`README.md`、`README.zh-CN.md` 和 `docs/` 对应文档。
-- 测试必须使用隔离配置目录，避免向真实 `~/.config/agentsync/backups/` 写测试备份。
-
-## 验证命令
-
-文档改动只需执行文档导航检查。代码、配置、构建脚本或发布配置改动后执行：
-
-```bash
-go test ./...
+```sh
+python3 scripts/check_repository.py
+python3 -m unittest discover -s scripts -p "test_*.py"
+go test -race ./...
 go build ./...
-GOBIN=~/.local/bin go install .   # 见下方说明,不能省略 GOBIN
-agentsync --check
+go vet ./...
+golangci-lint run ./...
 goreleaser check
 ```
 
-- **覆盖本机二进制必须带 `GOBIN=~/.local/bin`**:本机 `agentsync` 实际在 `~/.local/bin/agentsync`(在 PATH 内);裸 `go install .` 会装到 `$GOPATH/bin`(`~/go/bin`,不在 PATH),导致改完代码后 `agentsync --check` 仍跑旧版、看不到新行为。排查“改了没生效”前先确认跑的是哪个二进制。
-- 本机若已 `enable --now agentsync.service`，`go install` 之后必须 `systemctl --user restart agentsync.service`，否则 `--watch` 守护进程仍是旧 binary。
-- 声称验证通过时，回复里写出实际跑过的命令和结果（至少 `go test ./...` 通过）；禁止只口头说「测过了」。
-- `agentsync --check` 是只读检查;涉及真实用户目录的验证前,先确认不会覆盖未备份内容。
-- 功能新增 / 缺陷修复验证通过后,按全局规范默认走完整发布流程:提交 → 打 `v*` tag → 推送 → tag 触发 GitHub Actions(GoReleaser)构建产物并自动更新 `x0c/homebrew-tap` 的 cask。用 `gh run list` / `gh release list` 确认远端 Release 成功、cask 版本已跟随。
+The Python 3.9+ check uses only the standard library. It checks repository language, portable documentation links, and public-path hygiene. Review full diagnostic output and investigate each distinct warning; a successful build alone is insufficient.
 
-## 文档导航
+Exercise the changed behavior through the CLI with an isolated home before installing. Build a binary into a temporary directory, then verify preview -> apply -> recheck, content preservation, backups, and an absent runtime staying absent. Use `--repo --check` to validate repository mode without modifying the checkout. The [workflow guide](docs/AGENTSYNC_GUIDE.md) covers expected results and watcher verification.
 
-- [docs/GITHUB_DISCOVERY_GUIDE.md](docs/GITHUB_DISCOVERY_GUIDE.md): **must read** before changing or reviewing GitHub discovery, About, topics, README positioning, or star-growth measurements; skipping it risks confusing automated clones with adoption or overstating platform support.
-- [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)：改命令行为、检查模式、全局/仓库/批量收敛、草稿采纳、`--watch` / systemd，或排查 Cursor「规则已同步但 Agent 看不到」、MCP 被清空、watch 不生效前**必读**。不读会漏验证入口或误判注入未生效。
-- [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)：改规范文件/Skill 根目录/MCP（空文件、SkipMCP、`sync-policy.json`）、路径与别名、备份与合并、`.gitignore`/`.stignore`、安全边界前**必读**。不读会弄丢备份合并语义、过滤写出语义或把 Cursor 落盘当成已注入。
-- [docs/agent_runtime_global_paths.md](docs/agent_runtime_global_paths.md)：新增/调整某 runtime 规范入口或 skill 目录、核对官方全局路径、查 Cursor `~/.cursor/rules` 注入存疑前**必读**。不读会写错 Detect/落点。
-- [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)：实现或调整 MCP 同步、核对用户级 MCP 落点与 schema、跨工具字段转换、判断 key 级合并还是整文件覆盖前**必读**。不读会清空热文件或写错 schema。
-- [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md)：改对外安装与用法（含 Cursor 注入 caveat）前**必读**。
+For a local install, choose a directory on `PATH`, set `GOBIN` explicitly, and check the resolved executable before validating it. An enabled watcher must be restarted after its binary is replaced. Never assume a bare `go install .` replaces the executable the user actually runs.
 
-## 领域地图（doc-init）
+Releases use `v*` tags and [GoReleaser configuration](.goreleaser.yml). The release workflow tests and builds the tagged commit on Linux, macOS, and Windows before publishing archives and updating `x0c/homebrew-tap`. Confirm release assets and the tap version; do not substitute an earlier commit's CI result. The workflow guide also documents a local release path. Release notes are English first with a complete Simplified Chinese translation.
 
-<!-- 覆盖度复核基线：2026-06-30 · 源码指纹 扫描 20 文件 / Go 8 / 0 子模块 · 基线提交 577b8bb -->
+## Document index
 
-| 领域 | 入口锚点 |
-|------|---------|
-| 命令调度与运行模式 | main.go；internal/agentsync/run.go；internal/agentsync/watch.go |
-| 规范文件收敛 | internal/agentsync/run.go；internal/agentsync/merge.go |
-| Skill 根目录收敛 | internal/agentsync/skills.go；internal/agentsync/policy.go |
-| MCP 配置收敛 | internal/agentsync/mcp.go；internal/agentsync/mcp_render.go；internal/agentsync/mcp_apply.go；internal/agentsync/policy.go |
-| 路径、别名与备份策略 | internal/agentsync/paths.go；internal/agentsync/files.go；internal/agentsync/backup_session.go；internal/agentsync/restore.go |
+Read the documents relevant to the current task before changing behavior; consult adjacent guides when useful.
 
-## 待补充知识库（doc-init backlog）
-
-- [待补充] 发布与安装链路 Guide —— 入口锚点：.github/workflows/release.yml；.goreleaser.yml；触发场景：调整 GitHub Release、GoReleaser、Homebrew cask、安装分发前。
-- [待补充] 测试隔离与安全验证 Guide —— 入口锚点：internal/agentsync/run_test.go；触发场景：新增同步场景测试、调整真实用户目录保护、排查测试污染风险前。
-
-## 改动注意事项
-
-- 改 `--check`、`--repo`、`--all`、`--adopt`、`--rollback`、`--force`、`--watch` 任一行为时，先读 [docs/AGENTSYNC_GUIDE.md](docs/AGENTSYNC_GUIDE.md)，再同步更新 README 的用法示例。`SkipMCP` 只给 `--watch` 内部用，不要加成 CLI flag。不要加 `agentsync service install`：只维护 `contrib/systemd/` 与 `contrib/launchd/` 模板。
-- 改统一源、目标入口、备份、合并、别名降级、Skill 根目录替换或 `sync-policy.json` 过滤时，先读 [docs/AGENTSYNC_KNOWLEDGE_BASE.md](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
-- 实现或改 MCP 同步（统一源、Detect、写入目标、schema 转换、热文件合并、按工具策略过滤）时，先读 [docs/agent_runtime_mcp_paths.md](docs/agent_runtime_mcp_paths.md)；路径表或转换规则变了必须同步该文档。
-- `CLAUDE.md` 必须保持单行 `@AGENTS.md`，不要在其中写项目规则。
-- `.doc-init-*.json` 是 doc-init 扫描产物；若需要重新初始化可复用或重跑，但普通功能改动不依赖它们。
+| Document | Contents |
+|---|---|
+| [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md) | Installation, first use, feature boundaries, and public safety guarantees. |
+| [Workflow guide](docs/AGENTSYNC_GUIDE.md) | Commands, report states, watch/service setup, isolated validation, Cursor troubleshooting, and releases. |
+| [Synchronization knowledge base](docs/AGENTSYNC_KNOWLEDGE_BASE.md) | Ownership, synchronization mechanisms, preservation boundaries, implementation anchors, and known limitations. |
+| [Instruction and skill paths](docs/agent_runtime_global_paths.md) | Implemented runtime targets, discovery differences, and confidence limits. |
+| [MCP paths and formats](docs/agent_runtime_mcp_paths.md) | Runtime configuration locations, merge strategies, schema translation, and compatibility constraints. |
+| [GitHub discovery guide](docs/GITHUB_DISCOVERY_GUIDE.md) | Public positioning, README/platform consistency, discovery references, and traffic measurement limits. |

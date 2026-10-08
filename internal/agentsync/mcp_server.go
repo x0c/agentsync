@@ -282,8 +282,8 @@ func containsShellSubst(s string) bool {
 	return strings.Contains(s, "$(")
 }
 
-// isCodexBundledMCP 识别 Codex 桌面/CLI 捆绑的本机服务器。
-// 这些条目只对 Codex 有意义，写进其他工具会启动失败。
+// isCodexBundledMCP identifies local servers bundled with Codex desktop or CLI.
+// These entries are Codex-specific and fail to start in other runtimes.
 func isCodexBundledMCP(srv mcpServer) bool {
 	base := filepath.Base(srv.Command)
 	switch base {

@@ -8,14 +8,14 @@ type Options struct {
 	Rollback string // "latest", YYYYMMDD-HHMMSS, or path under backups/; empty = unused
 	Force    bool
 	Watch    bool
-	SkipMCP  bool // 内部：仅规范/Skill 变化时由 --watch 设置，避免覆盖工具侧 MCP
+	SkipMCP  bool // Internal: watch sets this for instruction/skill-only changes to preserve runtime MCP.
 }
 
 type Target struct {
 	Path string
 	Mode string
-	// Detect 是判断该 runtime 是否已安装的标志目录：为空表示无条件同步；
-	// 非空且该目录不存在时，视为该 runtime 未安装，跳过同步，绝不为其创建文件。
+	// Detect is the runtime installation directory; an empty value disables gating.
+	// If a nonempty Detect path is absent, skip synchronization without creating files.
 	Detect string
 }
 
@@ -43,7 +43,7 @@ type SkillTarget struct {
 	// Name is the stable runtime key used in sync-policy.json (e.g. "codex").
 	Name string
 	Path string
-	// Detect 语义同 Target.Detect：runtime 未安装时跳过，不创建其 skill 根目录。
+	// Detect follows Target.Detect: skip absent runtimes without creating skill roots.
 	Detect string
 }
 

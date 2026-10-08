@@ -1,76 +1,38 @@
-# agentsync 命令工作流 Guide
+# Workflow guide
 
-## 文档定位
+This guide covers commands, report states, service setup, validation, and releases. See the [synchronization knowledge base](AGENTSYNC_KNOWLEDGE_BASE.md) for preservation rules and implementation details.
 
-本文覆盖 agentsync 的命令入口、用户工作流、验证方式和发布入口。它回答“执行哪个命令会发生什么、改完如何确认行为正确”。收敛机制内部细节、路径策略、备份策略和 Skill 根目录替换规则见 [AGENTSYNC_KNOWLEDGE_BASE.md](AGENTSYNC_KNOWLEDGE_BASE.md)。
+## Commands
 
-## 核心命令速查
-
-| 场景 | 命令 | 是否写文件 | 主要输出 | 实现入口 |
-|---|---|---:|---|---|
-| 预览全局收敛 | `agentsync --check` | 否 | `Results`、`Skills`、`MCP`、可能的 `Merge draft` | `main.go`；`internal/agentsync/run.go` |
-| 执行全局收敛 | `agentsync` | 是 | 统一源、目标别名、备份、Skill 结果、MCP 结果 | `internal/agentsync/run.go`；`internal/agentsync/skills.go`；`internal/agentsync/mcp.go` |
-| 后台持续收敛 | `agentsync --watch` | 是（有变化时） | 首次同步后，统一源或新装 runtime 变化再同步 | `internal/agentsync/watch.go` |
-| 收敛当前仓库 | `agentsync --repo` | 是 | 当前仓库 `CLAUDE.md` 指向 `AGENTS.md` | `internal/agentsync/paths.go` |
-| 批量收敛仓库 | `agentsync --all ~/Codes` | 是 | 扫描到的仓库数量与每个仓库结果 | `internal/agentsync/run.go` |
-| 采纳合并草稿 | `agentsync --adopt <draft>` | 是 | 备份原统一源并用草稿替换 | `internal/agentsync/merge.go` |
-| 回滚最近一次替换 | `agentsync --rollback latest` | 是 | 按备份戳还原入口；还原前再备份当前文件 | `internal/agentsync/restore.go` |
-| 强制替换冲突入口 | `agentsync --force` | 是 | 备份后替换错误链接或不同内容文件 | `internal/agentsync/run.go` |
-
-## 命令调度流程
-
-```mermaid
-flowchart TD
-    A[main.go 解析 flag] --> B[agentsync.Run]
-    B -->|--all| C[runAll 扫描 Git 仓库]
-    B -->|--repo| D[repoConfig 使用仓库 AGENTS.md]
-    B -->|--watch| W[watchLoop 轮询统一源与 Detect]
-    B -->|--rollback| R[runRollback 按备份戳还原]
-    B -->|默认| E[defaultGlobalConfig 使用用户级统一源]
-    D --> F[syncConfig]
-    E --> F
-    C --> F
-    W --> F
-    B -->|--adopt| G[adoptDraft]
-    G --> F
-    F --> H[syncTarget 处理规范文件入口]
-    F --> I[syncSkills 处理 Skill 根目录]
-    F --> K[syncMCP 处理 MCP 配置]
-    H --> J[printReport]
-    I --> J
-    K --> J
-    R --> J
-```
-
-命令入口只负责参数到 `Options` 的映射。实际工作都汇入 `Run()`：`--rollback` 走备份还原；否则先判断是否批量仓库模式，再根据全局/仓库模式生成配置，最后执行 `syncConfig()` 并打印报告。
-
-## 全局收敛工作流
-
-全局模式的统一源与目标来自 `defaultGlobalConfig()`：
-
-| 类型 | 路径 | 说明 |
+| Goal | Command | Writes files? |
 |---|---|---|
-| 规范统一源 | `~/.config/agentsync/AGENTS.md` | 所有工具共享的指令文件 |
-| Skill 统一源 | `~/.config/agentsync/skills` | 每个子目录是一个完整 skill |
-| MCP 统一源 | `~/.config/agentsync/mcp.json` | 所有已安装工具共享的 MCP 服务器集合 |
-| 同步策略 | `~/.config/agentsync/sync-policy.json` | 可选；按工具裁剪写出的 MCP / Skill（不含 token） |
+| Preview global synchronization | `agentsync --check` | No |
+| Apply global synchronization | `agentsync` | Yes |
+| Keep canonical changes applied | `agentsync --watch` | On changes |
+| Align the current repository's instruction entry | `agentsync --repo` | Yes |
+| Align repositories under a directory | `agentsync --all ~/projects` | Yes |
+| Adopt a reviewed merge draft | `agentsync --adopt <draft>` | Yes |
+| Restore the latest backup | `agentsync --rollback latest` | Yes |
+| Replace conflicting entries after backup | `agentsync --force` | Yes |
 
-规范/Skill 入口覆盖 Codex、OpenCode、Claude、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、dsh（DeepSeek Harness）、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 及通用 `~/.agents`，完整清单以 `defaultGlobalConfig()` 为准。各入口大致形如：
+`main.go` maps flags into `Options`; `Run()` selects rollback, batch, repository, global, or watch execution. Synchronization reports instruction, skill, and MCP results separately.
 
-```text
-规范入口：  ~/.codex/AGENTS.md、~/.claude/CLAUDE.md、~/.gemini/GEMINI.md、
-            ~/.cursor/rules/AGENTS.mdc（cursor 模式受管副本）、~/.joycode/AGENTS.md …
-Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
-            （整体指向 Skill 统一源）
-```
+## Global synchronization
 
-**按安装门控**：每个入口只在对应工具已安装（其用户级主目录如 `~/.codex`、`~/.joycode` 存在）时才收敛；未安装的工具报告为 `skipped`，不创建任何文件。因此在同一台机器上 `Results` / `Skills` / `MCP` 里出现的入口取决于你实际装了哪些工具。
+| Canonical source | Purpose |
+|---|---|
+| `~/.config/agentsync/AGENTS.md` | User-owned global instructions |
+| `~/.config/agentsync/skills/` | Complete skill directories |
+| `~/.config/agentsync/mcp.json` | Machine-local MCP server definitions; may contain tokens |
+| `~/.config/agentsync/sync-policy.json` | Optional per-runtime allow/deny policy; contains no tokens |
 
-第一次运行可能会出现 `created`、`merged`、`replaced`、`linked` 等状态，未装的工具显示 `skipped`。第二次运行已安装工具应收敛到 `ok`，这是幂等性判断的主要用户信号。
+The target list comes from `defaultGlobalConfig()` in `internal/agentsync/paths.go`. Each target is gated by its runtime home directory (`Detect`). An absent directory produces `skipped` without creating files. The [instruction and skill path guide](agent_runtime_global_paths.md) lists implemented targets.
 
-全局模式还会把 `mcp.json` 翻译写入已安装工具的用户级 MCP 配置，并在 `AGENTS.md` 注入「只改统一源」说明。可用 `sync-policy.json` 按工具排除或白名单某些 MCP / Skill（统一源仍是全集）。仓库模式与 `--all` 不同步 MCP。 Pi uses native MCP by default; an enabled `pi-mcp-adapter` selects the shared adapter config. Optional top-level `piMCP` in `sync-policy.json` can force `native` or `adapter` (default `auto`). The watcher notices Pi settings and extension changes; it never installs/removes packages or renames old configs.落点与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
+The first apply may report `created`, `merged`, `replaced`, or `linked`. Repeating it should converge installed targets to `ok`. Existing unique instructions are preserved before replacement. Managed copies, including Cursor rules, are derived from the source and are refreshed directly rather than imported back into it.
 
-示例：让 Codex 不同步 tavily，其它工具照常：
+Global mode translates canonical MCP servers into installed runtimes' formats and injects an English reminder to edit only the canonical configuration. Repository and batch modes do not synchronize global instructions, skills, or MCP. Pi selects native or adapter output as described in the [MCP guide](agent_runtime_mcp_paths.md#pi-earendil-workspi).
+
+For example, exclude a server from Codex while keeping it available to other runtimes:
 
 ```json
 {
@@ -78,180 +40,124 @@ Skill 入口：~/.codex/skills、~/.cursor/skills、~/.joycode/skills …
   "mcp": {
     "default": "allow",
     "targets": {
-      "codex": { "deny": ["tavily"] }
+      "codex": { "deny": ["example-server"] }
     }
   }
 }
 ```
 
-保存为 `~/.config/agentsync/sync-policy.json` 后运行 `agentsync`（或等 `--watch`）。报告里 Codex 行会带 `filtered out: tavily`。
+Save the policy beside the canonical sources, then apply or let the watcher handle it. The report identifies filtered servers. Filtering never removes content from the canonical source.
 
-## 检查模式
+## Check mode and report states
 
-`--check` 只做状态判定，不创建统一源、不写备份、不替换入口、不复制 skill、不写 MCP 配置。报告中的状态含义：
+`--check` does not create sources, backups, directories, aliases, skills, ignore files, or MCP configuration. A `would ...` detail describes a future apply, not an action already performed.
 
-| 状态 | 含义 | 下一步 |
+| State | Meaning | Next step |
 |---|---|---|
-| `skipped` | 该工具未安装（`Detect` 主目录不存在） | 无需处理；装了该工具再跑一次即可收敛 |
-| `ok` | 入口已指向统一源（或过滤后的 MCP/Skill 视图已一致） | 无需处理 |
-| `warning` | 策略里写了未知的工具名 | 检查 `sync-policy.json` 的 target 键 |
-| `missing` | 统一源或目标入口缺失 | 直接运行 `agentsync` 创建 |
-| `mergeable` | 目标文件有独特内容，可合并进统一源 | 运行 `agentsync`，必要时检查合并结果 |
-| `replaceable` | 文件或目录可被备份后替换 | 运行 `agentsync` |
-| `wrong-link` | 已是链接但指向不对 | 运行 `agentsync`；冲突强时可加 `--force` |
-| `broken-link` | 链接目标已失效 | 运行 `agentsync` 修复 |
-| `blocked` | 目标不是可处理的普通文件或目录 | 人工判断后再处理 |
+| `skipped` | Runtime is not installed | No action needed |
+| `ok` | Target matches the canonical source or filtered view | No action needed |
+| `warning` | Policy contains an unknown target name | Review the policy |
+| `missing` | Source or target is absent | Apply to create it |
+| `mergeable` | Target contains unique content | Apply, then review the preserved content |
+| `replaceable` | Target can be backed up and replaced | Apply |
+| `wrong-link` | Link points to the wrong source | Apply; use `--force` only for intentional replacement |
+| `broken-link` | Link destination is absent | Apply to repair it |
+| `blocked` | Target or configuration cannot be handled safely | Inspect the reported cause |
 
-**AI 易错点**：不要把 `--check` 报告里的 “would ...” 当作已修复。它只说明下一次真实运行会做什么。
+## Watch mode and services
 
-## 后台监听
+`--watch` is optional; a plain `agentsync` remains a one-shot command. The watcher polls canonical instructions, MCP configuration, skills, policy, runtime detection, and Pi output selection. It does not monitor runtime output files or import edits made through a runtime's UI.
 
-MCP 配置不能整文件 symlink，Cursor 的 `AGENTS.mdc` 也是受管副本。`--watch` 用标准库轮询（默认 2 秒）统一源 `AGENTS.md` / `mcp.json` / `skills/` / `sync-policy.json`，以及各 runtime `Detect` 目录是否出现。指纹按这几块分开：只改规范或 Skill、且策略未变时**不同步 MCP**，避免把工具 UI 里新加的服务器冲掉。`mcp.json`、策略文件变化或新装 runtime（Detect 出现）才会写 MCP。变化必须连续稳定一段时间才同步（trailing debounce，默认 1.5 秒）；新 Detect 目录再多等约 5 秒，给安装器写完首次配置。Skill 指纹忽略 Syncthing 冲突文件和 `.DS_Store`，但会跟踪 `.system` 隐藏 skill。它**不**监视 `~/.claude.json` 等热文件，避免写回环，也不从工具侧把 MCP 拉回统一源。用户应只改统一源与策略文件。
+The default polling interval is two seconds. Changes must remain stable for 1.5 seconds; newly detected runtimes receive about five additional seconds for installation to finish. Skill fingerprints ignore Syncthing conflict files, `.DS_Store`, and `.stversions`, but include hidden skill content such as `.system`. Directory modification times are excluded so ignored files cannot trigger synchronization.
 
-空文件、`{}`、缺 `mcpServers` 的 `mcp.json` 会报错并跳过，不会清空已安装工具。watch 下即便写成 `"mcpServers": {}`，只要工具侧还有服务器也会拒绝覆盖；要清空请手动跑一次 `agentsync`。同步失败不会把这次坏指纹记成已处理，下次仍会重试。
+Instruction/skill-only changes with an unchanged policy skip MCP writes. MCP, policy, Pi selection, and runtime installation changes can trigger MCP synchronization. Failed runs do not advance the successful fingerprint and are retried; errors go to stderr while the watcher continues.
 
-不能与 `--check`、`--repo`、`--all`、`--adopt`、`--rollback`、`--force` 同时使用。失败会打到 stderr 并继续监听，方便当 systemd/launchd 服务。
+An empty, malformed, or missing-`mcpServers` canonical file is rejected without clearing installed configurations. Watch mode also rejects an explicitly empty server map while installed runtimes still contain servers. An intentional clear requires a one-shot apply.
 
-CLI 默认仍是一次性 `agentsync`。`--watch` 是可选常驻，不要改成隐式默认，也不要加 `agentsync service install`：只提供模板，由用户自己 enable。
+Watch cannot combine with `--check`, `--repo`, `--all`, `--adopt`, `--rollback`, or `--force`. Service setup uses the templates in `contrib/`; there is no `service install` command.
 
-Linux 用户单元模板：`contrib/systemd/agentsync.service`（`ExecStart` 默认 `%h/.local/bin/agentsync --watch`）。macOS 模板：`contrib/launchd/top.x0c.agentsync.plist`，需改成实际二进制路径。改 watch 代码后：`GOBIN=~/.local/bin go install .`，若本机已 enable 该单元则再 `systemctl --user restart agentsync.service`。
+On Linux, after installing the binary at the template's configured path:
 
-## 仓库模式
+```sh
+mkdir -p ~/.config/systemd/user
+cp contrib/systemd/agentsync.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now agentsync.service
+```
 
-`agentsync --repo` 用当前 Git 仓库根目录的 `AGENTS.md` 作为项目级源，只管理一个目标：
+The template defaults to `%h/.local/bin/agentsync --watch`. On macOS, copy `contrib/launchd/top.x0c.agentsync.plist`, set its executable path to the installed binary, and load it using launchd. After replacing an active watcher's binary, restart the service and verify it uses the replacement.
+
+## Repository and batch modes
+
+`--repo` discovers the current Git root and manages only:
 
 ```text
 CLAUDE.md -> AGENTS.md
 ```
 
-仓库模式通过 `findRepoRoot()` 找 `.git`，再由 `repoConfig()` 构造配置。目标使用相对链接模式，便于仓库移动目录后链接仍成立。
+It uses a relative link so moving the repository does not break the entry. `--all <directory>` scans Git repositories recursively, skipping large dependency/build directories such as `node_modules`, `.venv`, `target`, and `build`. It aggregates results under `Repositories`; a repository error stops the run. Batch mode applies repository behavior, not a global sync inside every checkout.
 
-仓库模式不处理全局 Skill 目录、用户级全局规范入口，也不处理 MCP。
+## Rollback
 
-## 批量仓库模式
+Every real write session groups replaced files, directories, and links under a unique timestamp in `~/.config/agentsync/backups/`. Its `manifest.json` records original paths and types.
 
-`agentsync --all <目录>` 会递归扫描目录下的 Git 仓库，并对每个仓库执行仓库模式。扫描时会跳过 `node_modules`、`.venv`、`target`、`build` 等常见大型构建目录。
-
-批量模式的结果聚合到一个报告里，`Repositories` 表示扫描到的仓库数量。某个仓库出现错误会中断本轮执行；这适合个人工作区批量规范 `CLAUDE.md` 指针。
-
-**AI 易错点**：`--all` 的语义是“批量仓库级指针收敛”，不是全局规范和 Skill 同步；不要把它写成对每个仓库执行全局模式。
-
-## 一键回滚
-
-每次真实写入（非 `--check`）会开一个备份会话：同一轮同步里被替换的文件/目录/软链写进同一个时间戳目录，并留下 `manifest.json`（记录原始绝对路径与类型）。
-
-```bash
-agentsync --check --rollback latest   # 只预览会还原哪些路径
-agentsync --rollback latest            # 还原最近一次备份戳
-agentsync --rollback 20260916-120412   # 还原指定戳
+```sh
+agentsync --check --rollback latest
+agentsync --rollback latest
+agentsync --rollback 20260916-120412
 ```
 
-还原前会先把当前线上文件再备份一轮，因此回滚本身也可再回滚。回滚**不会**自动再跑一次收敛——避免立刻把统一源重新盖回去。需要重新对齐统一源时再手动执行 `agentsync`。
+Rollback backs up current entries before restoring. It does not automatically resynchronize afterward, which would immediately replace the restored state. A stamp contains only entries replaced in that session, not a full machine snapshot; `latest` selects the newest stamp. Older backups without a manifest require manual restoration.
 
-不能与 `--watch`、`--repo`、`--all`、`--adopt`、`--force` 同时使用。没有 `manifest.json` 的旧备份（本功能上线前）不能一键还原，需人工从 `~/.config/agentsync/backups/<stamp>/` 拷回。
+Rollback cannot combine with `--watch`, `--repo`, `--all`, `--adopt`, or `--force`.
 
-**AI 易错点**：备份戳只包含**当次被替换**的入口，不是整机快照；`latest` 是时间戳目录中最新的一个，不是“上次完整全局同步的并集”。
+## Merge drafts
 
-## 合并草稿与采纳
+Unique user-written content can be appended to the canonical source. Generated copies marked `managed-by: agentsync` are refreshed directly; importing a stale generated copy would duplicate obsolete instructions.
 
-当现有入口文件和统一源存在冲突时，agentsync 会尽量将独特内容追加到统一源。**例外**：带 `<!-- managed-by: agentsync` 的受管副本（含 Cursor `AGENTS.mdc`）是统一源衍生品，过期时直接以统一源覆盖，不会回写；否则改统一源后再同步会把旧副本整篇拼回源文件。
+To replace the canonical instructions with manually prepared content, write and review a Markdown file, then run:
 
-对于需要人工整理的场景，`createMergeDraft()` 会在合并草稿目录生成 Markdown，报告中出现 `Merge draft` 和下一步命令：
-
-```bash
+```sh
 agentsync --adopt <draft-path>
 ```
 
-采纳草稿时，`adoptDraft()` 会：
+Adoption expands and validates the path, backs up the current source, writes the reviewed draft, then synchronizes targets. `--adopt --check` checks availability without replacing the source.
 
-1. 展开草稿路径。
-2. 确认草稿存在。
-3. 非检查模式下备份当前统一源。
-4. 将草稿内容写入统一源。
-5. 继续执行一次同步，让目标入口重新收敛。
+## Cursor rules visible in Settings but absent from the prompt
 
-`--adopt --check` 只检查草稿路径是否可用，不替换统一源。
+A Cursor target reporting `linked` or `ok` proves filesystem synchronization. Settings listing `~/.cursor/rules/AGENTS.mdc` does not prove that a particular Agent session loaded its body. Historical reports describe missing injection in Agents Window or home-directory workspaces, and skills can still load through a separate discovery path.
 
-## Cursor 规则已同步但 Agent 看不到
+Open a concrete project workspace and start a fresh session. Ask it to quote a distinctive heading from the canonical instructions. If necessary, use Cursor's User Rules text setting or explicitly reference the `.mdc` file in chat. Verify the session's actual content rather than relying on the Settings list. See the [path guide](agent_runtime_global_paths.md#loading-and-confidence-limits) for scope and sources; these are compatibility observations, not a promise about every Cursor version.
 
-`agentsync` / `agentsync --check` 对 Cursor 报告 `linked` / `ok`（目标 `~/.cursor/rules/AGENTS.mdc`）只说明**磁盘侧**已收敛。Settings → Rules 能列出该文件，也不等于当前 Agent 会话已把正文注入系统提示。
+## Development validation
 
-常见根因（Cursor 产品侧，非 agentsync 写错）：
+Run the commands in [repository instructions](../AGENTS.md#validation-and-release). Tests must use temporary configuration roots. Review complete output, including warnings.
 
-1. **Agents Window / Agent 以 `$HOME` 为 workspace**——未打开具体项目文件夹时，`~/.cursor/rules/*.mdc` 经常不加载（论坛员工说明：打开项目 workspace 后才会同时吃到用户级 file-backed 规则与项目规则）。
-2. **Settings 可见、运行时不注入**——file-backed 全局 `.mdc` 与 UI「User Rules」纯文本是两条链路；后者更稳。
-3. **`alwaysApply: true` 偶发被当成可请求规则**——社区有报告（称客户端 3.2 修复）；表现是规则在「可 @」列表里，但不自动进提示词。
-4. **Skills 仍可能正常**——`~/.cursor/skills` 与 rules 发现路径不同，可出现「skills 有、全局规则没有」。
+Build into a temporary directory and exercise the real CLI with a temporary home containing two installed-runtime directories and distinct instruction files. Verify:
 
-自检：新开 Agent，直接问能否复述统一源里某段特有标题（如「收工前反思」）；能复述才算注入成功。勿只看 Settings 列表。
+1. Preview leaves all files unchanged and creates no backups.
+2. Apply preserves both instruction texts and backs up replaced entries.
+3. Recheck reports installed instruction targets as `ok`.
+4. An absent runtime remains absent; reports and generated notices are English.
+5. Repository preview reports only the checkout's instruction entry, without global skills or MCP.
 
-workaround（按稳妥程度）：
+Use temporary `HOME`, `XDG_CONFIG_HOME`, and any runtime-specific root overrides; never point a write-mode smoke test at real user configuration. The synchronization knowledge base records additional MCP and skill edge cases.
 
-1. 用具体项目目录打开 workspace 再开 Agent（不要用 home）。
-2. 把关键段落贴进 Settings → Rules → User Rules（纯文本，跨表面最稳）。
-3. 聊天里 `@` 引用 `~/.cursor/rules/AGENTS.mdc`。
+For installation, choose a directory on `PATH` and set `GOBIN` explicitly. Check `command -v agentsync` and the resolved binary; a Homebrew installation can precede a source installation on `PATH`. No HTTP service or database is required.
 
-路径与置信度细节见 [agent_runtime_global_paths.md](agent_runtime_global_paths.md) Cursor 行与「主要冲突与存疑点」表。
+## Releases
 
-## 本地开发验证
+Choose the next unused version, commit the validated workspace, tag that commit, and push the branch and tag. The tag workflow reuses CI for the same commit on Linux, macOS, and Windows before running GoReleaser. Archives cover macOS/Linux amd64 and arm64, and Windows amd64; Windows arm64 is excluded in `.goreleaser.yml`.
 
-代码改动后至少执行：
+The release token needs repository write permission. `HOMEBREW_TAP_GITHUB_TOKEN` needs write access to `x0c/homebrew-tap`. Confirm the published archive list, checksums, latest release, and cask version. Release notes use English first followed by a complete Simplified Chinese translation.
 
-```bash
-go test ./...
-go build ./...
-```
+A local release path is also available from the committed, tagged checkout:
 
-修改 CLI 行为后执行：
-
-```bash
-GOBIN=~/.local/bin go install .
-agentsync --check
-```
-
-本机若已 enable `agentsync.service`，install 后再 `systemctl --user restart agentsync.service`。回复里写出 `go test ./...` 的实际结果，不要只说测过了。
-
-改发布配置后执行：
-
-```bash
+```sh
 goreleaser check
+goreleaser release --clean --release-notes /path/to/reviewed-notes.md
 ```
 
-文档-only 改动执行：
+Use authenticated release/tap tokens from the environment without logging them. Run this only after the same tagged commit has passed the required platform validation and when the automated publisher is not publishing the same tag. This is the same packaging configuration used by CI; do not bypass failed validation or publish from a dirty tree.
 
-```bash
-python3 ~/.config/agentsync/skills/doc-init/scripts/doc_nav_lint.py --root .
-```
-
-没有 HTTP 端口或本地数据库。可选的 `--watch` 用用户级 systemd/launchd 常驻，模板在 `contrib/`，不单独写 `OPERATIONS_GUIDE.md`。运行验证主要是 CLI 冒烟、测试，以及（若已 enable）确认 watch 服务用的是刚装的二进制。
-
-## 发布入口
-
-正式发布由 tag 触发：
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-GitHub Actions 的 release 工作流先对该 tag 的同一提交复用 CI，在 Linux、macOS、Windows 都完成测试与构建后才运行 GoReleaser。GoReleaser 读取 `.goreleaser.yml`，构建 Linux、Darwin、Windows 的 amd64/arm64 产物，并更新 `x0c/homebrew-tap` 的 cask。任一系统失败时不得创建正式 Release 或更新 Homebrew。主分支 CI 卡在平台队列且未创建任何 job 时，可从 Actions 页面手动重跑同一工作流；不要用旧提交的成功记录冒充当前提交已验证。
-
-发布前必须确认：
-
-- `HOMEBREW_TAP_GITHUB_TOKEN` 已配置且有推送 `x0c/homebrew-tap` 的权限。
-- `.goreleaser.yml` 的 `homebrew_casks` 仍指向正确 tap。
-- tag 版本与 README 安装说明一致。
-
-发布链路本次未深写为独立文档，已登记在根 `AGENTS.md` 的 doc-init backlog。
-
-## 覆盖度与待补充项
-
-- 代码推断覆盖：命令入口、参数分发、全局/仓库/批量/草稿工作流均已从代码和 README 校准。
-- 多源证据补强：读取了 README、中文 README、CI、Release workflow、GoReleaser 配置和既有 docs。
-- Git 弱信号：历史只有 5 个提交，热点主要集中在 README、docs、release workflow 和 Skill 同步，作为优先级参考，不单独沉淀成当前规则。
-- Q&A 补充：缺少用户经验输入；真实团队常用命令、失败处理习惯和发布前人工检查口径仍待补充。
-- 待补充：发布与安装链路、测试隔离与安全验证可在后续 doc-update/doc-init 续写中拆为独立 Guide。
-
-<!-- 该文档由 doc-init 更新于 2026-06-30；定位：AI 修改 agentsync 命令工作流前的快速参考文档 -->
-
-<!-- 该文档整理/压缩于 2026-09-05 -->
+Long remote CI/publication waits may run in a traceable background process. Keep the run URL and completion log, and report pending outcomes accurately. A successful upload alone does not establish installability: validate the downloaded archive and installed command through preview, apply, and recheck.

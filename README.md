@@ -117,7 +117,7 @@ CLAUDE.md -> AGENTS.md
 Batch process repositories under a directory:
 
 ```bash
-agentsync --all ~/Codes
+agentsync --all ~/projects
 ```
 
 ## Safety
@@ -251,12 +251,14 @@ Pi uses built-in MCP by default (Pi 0.99+). If an enabled `pi-mcp-adapter` is co
 
 ## Development
 
-Project documentation is indexed in [AGENTS.md](AGENTS.md).
+Requires Go 1.25+ and Python 3.9+ for repository checks. Contribution rules and project guides are indexed in [AGENTS.md](AGENTS.md).
 
 ```bash
-go test ./...
+python3 scripts/check_repository.py
+python3 -m unittest discover -s scripts -p "test_*.py"
+go test -race ./...
 go build ./...
-agentsync --check
+go vet ./...
 ```
 
 Tagged releases are built by GoReleaser. To publish the Homebrew cask, create the `x0c/homebrew-tap` repository and add a `HOMEBREW_TAP_GITHUB_TOKEN` secret with permission to push to that tap.

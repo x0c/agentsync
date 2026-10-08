@@ -32,21 +32,21 @@ func TestRenderDshPatchBlock(t *testing.T) {
 		"url: http://localhost:3000/mcp",
 	} {
 		if !strings.Contains(text, want) {
-			t.Errorf("block 缺少 %q\n%s", want, text)
+			t.Errorf("block is missing %q\n%s", want, text)
 		}
 	}
-	// 按名排序保证确定性：github 必须在 web 之前。
+	// Sort by name for deterministic output: github must precede web.
 	if strings.Index(text, "mcp-github") > strings.Index(text, "mcp-web") {
-		t.Errorf("block 未按 server 名排序\n%s", text)
+		t.Errorf("block is not sorted by server name\n%s", text)
 	}
 }
 
 func TestRenderDshPatchBlockRejects(t *testing.T) {
 	if _, err := renderDshPatchBlock([]mcpServer{{Name: "bad name!"}}); err == nil || !strings.Contains(err.Error(), "dsh rejected") {
-		t.Errorf("非法 serverName 应被 dsh rejected，实际 %v", err)
+		t.Errorf("invalid serverName should be rejected by dsh, got %v", err)
 	}
 	if _, err := renderDshPatchBlock([]mcpServer{{Name: "sse-srv", Type: "sse", URL: "http://x/y"}}); err == nil || !strings.Contains(err.Error(), "dsh rejected") {
-		t.Errorf("sse 应被 dsh rejected，实际 %v", err)
+		t.Errorf("SSE should be rejected by dsh, got %v", err)
 	}
 }
 
@@ -56,21 +56,21 @@ func TestSpliceDshPatchBlock(t *testing.T) {
 		t.Fatalf("render error = %v", err)
 	}
 
-	// 空 patch（含官方注释头 + []）：注释保留，[] 被块替代。
+	// For an empty patch, preserve header comments and replace [] with the managed block.
 	empty := "# Your patch layer for this dsh profile\n[]\n"
 	next := spliceDshPatchBlock([]byte(empty), block)
 	if !strings.Contains(string(next), "# Your patch layer") {
-		t.Errorf("空文件注释头丢失：\n%s", next)
+		t.Errorf("empty patch lost its header comments:\n%s", next)
 	}
 	if strings.Contains(string(next), "[]") {
-		t.Errorf("空文件的 [] 应被替代：\n%s", next)
+		t.Errorf("empty patch should have its [] replaced:\n%s", next)
 	}
 
-	// 已有块：原地替换，块外不动。
+	// Replace an existing block in place; preserve everything outside it.
 	handwritten := "- insert:\n    - id: mine\n      name: some-plugin\n"
 	withBlock := spliceDshPatchBlock([]byte(handwritten), block)
 	if !strings.Contains(string(withBlock), "id: mine") {
-		t.Fatalf("手写条目丢失：\n%s", withBlock)
+		t.Fatalf("manual entry was lost:\n%s", withBlock)
 	}
 	other, err := renderDshPatchBlock([]mcpServer{{Name: "solo", Command: "x"}})
 	if err != nil {
@@ -78,10 +78,10 @@ func TestSpliceDshPatchBlock(t *testing.T) {
 	}
 	replaced := spliceDshPatchBlock(withBlock, other)
 	if strings.Contains(string(replaced), "mcp-github") || !strings.Contains(string(replaced), "id: mcp-solo") {
-		t.Errorf("块未被整体替换：\n%s", replaced)
+		t.Errorf("managed block was not replaced in full:\n%s", replaced)
 	}
 	if !strings.Contains(string(replaced), "id: mine") {
-		t.Errorf("替换时手写条目丢失：\n%s", replaced)
+		t.Errorf("replacement lost the manual entry:\n%s", replaced)
 	}
 }
 
@@ -91,14 +91,14 @@ func TestExtractDshServersRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render error = %v", err)
 	}
-	// 块外塞一个 !!js 行：extract 只读块内，不应受影响。
+	// A !!js line outside the block must not affect managed-block extraction.
 	doc := append(block, []byte("- insert:\n    - id: hand\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: hand\n        transport: stdio\n        command: x\n        env:\n          K: !!js process.env.K\n")...)
 	got, err := extractDshServers(doc)
 	if err != nil {
 		t.Fatalf("extract error = %v", err)
 	}
 	if !sameMCPServers(got, servers) {
-		t.Errorf("round trip 不一致：got %+v want %+v", got, servers)
+		t.Errorf("round trip mismatch: got %+v want %+v", got, servers)
 	}
 }
 
@@ -127,13 +127,13 @@ func TestSyncDshMCPTargetBlockedWithoutDep(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 	if result.Status != "blocked" {
-		t.Errorf("无依赖应 blocked，实际 %+v", result)
+		t.Errorf("missing dependency should be blocked, got %+v", result)
 	}
 	if backup != "" {
-		t.Errorf("blocked 不应备份，实际 %q", backup)
+		t.Errorf("blocked result should not create a backup, got %q", backup)
 	}
 	if pathExists(target.Path) {
-		t.Errorf("blocked 不应写文件")
+		t.Errorf("blocked result should not write a file")
 	}
 }
 
@@ -146,11 +146,11 @@ func TestSyncDshMCPTargetCreateAndOK(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 	if result.Status != "created" {
-		t.Fatalf("首次应 created，实际 %+v", result)
+		t.Fatalf("first sync should report created, got %+v", result)
 	}
-	// temp DSH_HOME 下无真实 profiles 以外的校验负担：validation 因 profiles 存在会尝试
-	// 找 dsh 二进制；有则跑 web profile 的 dump-config（读的是 temp home），无则跳过。
-	// 无论哪条路，文件必须已落盘且可被 extract。
+	// With profiles in the temporary DSH_HOME, validation attempts to locate dsh.
+	// If available, dump the web profile from that temporary home; otherwise skip validation.
+	// Either way, the written file must be extractable.
 	data, err := os.ReadFile(target.Path)
 	if err != nil {
 		t.Fatalf("read = %v", err)
@@ -160,7 +160,7 @@ func TestSyncDshMCPTargetCreateAndOK(t *testing.T) {
 		t.Fatalf("extract = %v", err)
 	}
 	if !sameMCPServers(got, dshTestServers()) {
-		t.Errorf("落盘内容不一致：got %+v", got)
+		t.Errorf("written content mismatch: got %+v", got)
 	}
 
 	again, _, err := syncDshMCPTarget(target, dshTestServers(), Options{}, nil)
@@ -168,7 +168,7 @@ func TestSyncDshMCPTargetCreateAndOK(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 	if again.Status != "ok" && again.Status != "blocked" {
-		t.Errorf("重复运行应 ok（或 dsh 自检 blocked），实际 %+v", again)
+		t.Errorf("repeated sync should report ok (or blocked by dsh validation), got %+v", again)
 	}
 
 	check, _, err := syncDshMCPTarget(target, []mcpServer{{Name: "new", Command: "x"}}, Options{Check: true}, nil)
@@ -176,7 +176,7 @@ func TestSyncDshMCPTargetCreateAndOK(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 	if check.Status != "replaceable" && check.Status != "blocked" {
-		t.Errorf("check 下内容变化应 replaceable，实际 %+v", check)
+		t.Errorf("changed content in check mode should report replaceable, got %+v", check)
 	}
 }
 
@@ -192,14 +192,14 @@ func TestSyncDshMCPTargetDropsCodexBundled(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 	if result.Status != "created" {
-		t.Fatalf("应 created，实际 %+v", result)
+		t.Fatalf("expected created, got %+v", result)
 	}
 	data, err := os.ReadFile(target.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(string(data), "node_repl") {
-		t.Errorf("Codex 捆绑 server 不应写进 dsh patch")
+		t.Errorf("Codex bundled servers must not be written into the dsh patch")
 	}
 	got, err := extractDshServers(data)
 	if err != nil {
@@ -221,14 +221,14 @@ func TestDefaultGlobalConfigIncludesDshMCP(t *testing.T) {
 		if m.Name == "dsh" {
 			found = true
 			if m.Mode != "patch" || m.Dialect != "dsh" {
-				t.Errorf("dsh MCP 入口 Mode/Dialect 错误：%+v", m)
+				t.Errorf("unexpected dsh MCP target Mode/Dialect:%+v", m)
 			}
 			if filepath.Dir(m.Path) != dir {
-				t.Errorf("dsh MCP 路径应跟随 DSH_HOME=%s，实际 %s", dir, m.Path)
+				t.Errorf("dsh MCP path should follow DSH_HOME=%s, got %s", dir, m.Path)
 			}
 		}
 	}
 	if !found {
-		t.Errorf("dsh MCP 入口缺失")
+		t.Errorf("missing dsh MCP target")
 	}
 }

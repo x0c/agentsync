@@ -375,12 +375,12 @@ func TestUninstalledRuntimeIsSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatalf("syncConfig() error = %v", err)
 	}
-	// 未安装的 runtime 目录不能被创建，也不能生成任何入口文件。
+	// Do not create directories or entry files for runtimes that are not installed.
 	if pathExists(missingRuntime) {
-		t.Fatalf("未安装 runtime 的目录被创建了: %s", missingRuntime)
+		t.Fatalf("created a directory for an absent runtime: %s", missingRuntime)
 	}
 	if !symlinkPointsTo(cfg.Targets[0].Path, cfg.Source) && !sameContent(cfg.Source, cfg.Targets[0].Path) {
-		t.Fatalf("已安装 runtime 未被收敛; report=%+v", report)
+		t.Fatalf("installed runtime was not synchronized; report=%+v", report)
 	}
 	skipped := 0
 	for _, r := range append(report.Results, report.SkillResults...) {
@@ -389,7 +389,7 @@ func TestUninstalledRuntimeIsSkipped(t *testing.T) {
 		}
 	}
 	if skipped != 2 {
-		t.Fatalf("应有 2 条 skipped 记录（规范入口+skill 入口），实际 %d; report=%+v", skipped, report)
+		t.Fatalf("expected 2 skipped results (instructions and skills), got %d; report=%+v", skipped, report)
 	}
 }
 
@@ -399,10 +399,10 @@ func TestDefaultGlobalConfigIncludesKimiCode(t *testing.T) {
 		t.Fatalf("defaultGlobalConfig() error = %v", err)
 	}
 	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".kimi-code", "AGENTS.md")) {
-		t.Fatalf("Kimi Code 规范入口缺失: %+v", cfg.Targets)
+		t.Fatalf("missing Kimi Code instruction target: %+v", cfg.Targets)
 	}
 	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".kimi-code", "skills")) {
-		t.Fatalf("Kimi Code Skill 入口缺失: %+v", cfg.SkillTargets)
+		t.Fatalf("missing Kimi Code skill target: %+v", cfg.SkillTargets)
 	}
 }
 
@@ -412,10 +412,10 @@ func TestDefaultGlobalConfigIncludesGenericAgents(t *testing.T) {
 		t.Fatalf("defaultGlobalConfig() error = %v", err)
 	}
 	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".agents", "AGENTS.md")) {
-		t.Fatalf("通用跨工具规范入口缺失: %+v", cfg.Targets)
+		t.Fatalf("missing shared instruction target: %+v", cfg.Targets)
 	}
 	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".agents", "skills")) {
-		t.Fatalf("通用跨工具 Skill 入口缺失: %+v", cfg.SkillTargets)
+		t.Fatalf("missing shared skill target: %+v", cfg.SkillTargets)
 	}
 }
 
@@ -425,10 +425,10 @@ func TestDefaultGlobalConfigIncludesJoyCode(t *testing.T) {
 		t.Fatalf("defaultGlobalConfig() error = %v", err)
 	}
 	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".joycode", "AGENTS.md")) {
-		t.Fatalf("JoyCode 规范入口缺失: %+v", cfg.Targets)
+		t.Fatalf("missing JoyCode instruction target: %+v", cfg.Targets)
 	}
 	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".joycode", "skills")) {
-		t.Fatalf("JoyCode Skill 入口缺失: %+v", cfg.SkillTargets)
+		t.Fatalf("missing JoyCode skill target: %+v", cfg.SkillTargets)
 	}
 }
 
@@ -438,10 +438,10 @@ func TestDefaultGlobalConfigIncludesDsh(t *testing.T) {
 		t.Fatalf("defaultGlobalConfig() error = %v", err)
 	}
 	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".dsh", "AGENTS.md")) {
-		t.Fatalf("dsh 规范入口缺失: %+v", cfg.Targets)
+		t.Fatalf("missing dsh instruction target: %+v", cfg.Targets)
 	}
 	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".dsh", "skills")) {
-		t.Fatalf("dsh Skill 入口缺失: %+v", cfg.SkillTargets)
+		t.Fatalf("missing dsh skill target: %+v", cfg.SkillTargets)
 	}
 }
 
@@ -458,16 +458,16 @@ func TestDefaultGlobalConfigIncludesCursor(t *testing.T) {
 		}
 	}
 	if cursorTarget == nil {
-		t.Fatalf("Cursor 规范入口缺失: %+v", cfg.Targets)
+		t.Fatalf("missing Cursor instruction target: %+v", cfg.Targets)
 	}
 	if cursorTarget.Mode != "cursor" {
-		t.Fatalf("Cursor 规范入口 Mode 应为 cursor，实际 %q", cursorTarget.Mode)
+		t.Fatalf("Cursor instruction target mode should be cursor, got %q", cursorTarget.Mode)
 	}
 	if !strings.HasSuffix(cursorTarget.Detect, filepath.Join(".cursor")) {
-		t.Fatalf("Cursor Detect 应为 ~/.cursor，实际 %q", cursorTarget.Detect)
+		t.Fatalf("Cursor Detect should be ~/.cursor, got %q", cursorTarget.Detect)
 	}
 	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".cursor", "skills")) {
-		t.Fatalf("Cursor Skill 入口缺失: %+v", cfg.SkillTargets)
+		t.Fatalf("missing Cursor skill target: %+v", cfg.SkillTargets)
 	}
 }
 
@@ -570,7 +570,7 @@ func TestStaleManagedCursorRuleDoesNotPolluteSource(t *testing.T) {
 		t.Fatalf("initial syncConfig() error = %v", err)
 	}
 
-	// 统一源已前进；Cursor 受管副本仍是旧正文。再同步不得把旧正文 append 回统一源。
+	// A stale Cursor managed copy must not append its old body back into the updated source.
 	if err := os.WriteFile(cfg.Source, []byte("# v2\nnew body with extra section\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -689,15 +689,15 @@ func TestDefaultGlobalConfigGatesEveryTarget(t *testing.T) {
 	}
 	for _, tgt := range cfg.Targets {
 		if tgt.Detect == "" {
-			t.Fatalf("规范入口缺少 Detect 门控: %s", tgt.Path)
+			t.Fatalf("instruction target has no Detect gate: %s", tgt.Path)
 		}
 	}
 	for _, tgt := range cfg.MCPTargets {
 		if tgt.Detect == "" {
-			t.Fatalf("MCP 入口缺少 Detect 门控: %s", tgt.Path)
+			t.Fatalf("MCP target has no Detect gate: %s", tgt.Path)
 		}
 		if tgt.Name == "iflow" {
-			t.Fatalf("iFlow 不应出现在 MCP 目标中: %+v", tgt)
+			t.Fatalf("iFlow should not be an MCP target: %+v", tgt)
 		}
 	}
 }

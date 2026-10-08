@@ -130,12 +130,17 @@ func piHasAdapterExtension(agentDir string) bool {
 func renderPi(servers []mcpServer) (map[string]any, error) {
 	for _, server := range servers {
 		if server.inferredType() != "stdio" && server.inferredType() != "http" {
-			return nil, fmt.Errorf("Pi native MCP server %q uses unsupported transport %q; use stdio or streamable HTTP, or an adapter", server.Name, server.inferredType())
+			return nil, fmt.Errorf("native Pi MCP server %q uses unsupported transport %q; use stdio or streamable HTTP, or an adapter", server.Name, server.inferredType())
 		}
 		if server.Name == "" || strings.IndexFunc(server.Name, func(r rune) bool {
-			return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-')
+			switch {
+			case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+				return false
+			default:
+				return true
+			}
 		}) >= 0 {
-			return nil, fmt.Errorf("Pi native MCP server %q has an invalid name; use letters, digits, underscores or hyphens", server.Name)
+			return nil, fmt.Errorf("native Pi MCP server %q has an invalid name; use letters, digits, underscores or hyphens", server.Name)
 		}
 	}
 	return marshalCanonicalMap(normalizeCursor(servers)), nil

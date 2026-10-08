@@ -8,7 +8,7 @@ DRAFT_*.md
 *.test
 coverage.out
 
-# doc-init 扫描产物
+# Documentation scan artifacts
 .doc-init-*.json
 .codebase-memory/
 
@@ -17,3 +17,7 @@ coverage.out
 .idea/
 .vscode/
 .claude/scheduled_tasks.lock
+
+# Python check caches
+__pycache__/
+*.pyc

@@ -288,7 +288,7 @@ func watchTreeFingerprint(root string) (string, error) {
 			}
 			return nil
 		}
-		// 只指纹文件。目录 mtime 会因被跳过的冲突文件而变化，不能算进哈希。
+		// Fingerprint files only; ignored conflict files can still change directory mtimes.
 		if d.IsDir() {
 			return nil
 		}
@@ -300,7 +300,9 @@ func watchTreeFingerprint(root string) (string, error) {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(h, "%s %d %d %d\n", rel, info.Mode(), info.ModTime().UnixNano(), info.Size())
+		if _, err := fmt.Fprintf(h, "%s %d %d %d\n", rel, info.Mode(), info.ModTime().UnixNano(), info.Size()); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
@@ -317,7 +319,7 @@ func watchShouldSkipName(name string) bool {
 	case ".DS_Store", ".git", ".stfolder", ".stversions", ".gitignore", ".stignore":
 		return true
 	default:
-		// 保留 .system 等隐藏 skill 目录，它们是统一源的真实内容。
+		// Include hidden skill directories such as .system in the canonical fingerprint.
 		return false
 	}
 }

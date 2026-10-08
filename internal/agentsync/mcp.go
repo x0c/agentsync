@@ -290,7 +290,7 @@ func loadTargetServers(target MCPTarget) ([]mcpServer, error) {
 		if len(data) == 0 {
 			return []mcpServer{}, nil
 		}
-		// 只读 managed 块；块外手写条目的自定义 tag 解析失败也不影响并集导入。
+		// Read only the managed block; custom tags in manual entries do not affect import.
 		servers, err := extractDshServers(data)
 		if err != nil {
 			return []mcpServer{}, nil

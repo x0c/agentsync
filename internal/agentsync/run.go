@@ -171,7 +171,7 @@ func readableContentPath(path string) string {
 
 func syncTarget(source string, target Target, opts Options) (TargetResult, string, error) {
 	result := TargetResult{Path: target.Path}
-	// runtime 未安装（标志目录不存在）时直接跳过，绝不为其创建目录或文件。
+	// Skip absent runtimes without creating directories or files.
 	if target.Detect != "" && !pathExists(target.Detect) {
 		result.Status = "skipped"
 		result.Detail = "runtime not installed"
@@ -197,7 +197,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		return result, "", err
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		// cursor 模式必须是带 frontmatter 的受管文件，裸 symlink 到统一源不算就绪。
+		// Cursor mode requires a managed file with frontmatter, not a bare source symlink.
 		if target.Mode == "cursor" {
 			if opts.Check {
 				result.Status = "wrong-link"
@@ -331,8 +331,8 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		result.Detail = kind
 		return result, backup, nil
 	}
-	// 受管副本（Cursor .mdc / writeManagedCopy）与 --force：统一源为准，直接替换，不回写。
-	// 否则「改统一源 → 再跑 agentsync」会把过期受管正文当独特内容 append 进统一源，造成整篇重复。
+	// Replace managed copies and forced targets from the canonical source without importing them.
+	// Importing a stale managed body would duplicate old instructions in the source.
 	if opts.Force || target.Mode == "cursor" || isManagedAgentsyncFile(target.Path) {
 		if opts.Check {
 			result.Status = "replaceable"

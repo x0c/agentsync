@@ -107,8 +107,8 @@ func extractCodexTOML(data []byte) ([]mcpServer, error) {
 	return serversFromMap(collapseDottedTOMLTables(raw), "codex"), nil
 }
 
-// collapseDottedTOMLTables 把 [mcp_servers.node_repl.env] 这类子表并回父服务器。
-// 有的 TOML 解码器会把点号路径留成同级键，不能当成另一台 MCP 服务器。
+// collapseDottedTOMLTables folds dotted child tables into their parent server.
+// Some TOML decoders leave dotted paths as sibling keys, not separate MCP servers.
 func collapseDottedTOMLTables(raw map[string]any) map[string]any {
 	if raw == nil {
 		return raw

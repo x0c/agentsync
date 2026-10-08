@@ -117,7 +117,7 @@ CLAUDE.md -> AGENTS.md
 批量处理目录下所有 Git 仓库：
 
 ```bash
-agentsync --all ~/Codes
+agentsync --all ~/projects
 ```
 
 ## 安全策略
@@ -251,12 +251,14 @@ Pi 默认使用内置 MCP（需要 Pi 0.99+）。配置中启用了 `pi-mcp-adap
 
 ## 开发
 
-项目文档入口：[AGENTS.md](AGENTS.md)。
+开发需要 Go 1.25+，仓库检查需要 Python 3.9+。贡献规范与项目指南入口：[AGENTS.md](AGENTS.md)。
 
 ```bash
-go test ./...
+python3 scripts/check_repository.py
+python3 -m unittest discover -s scripts -p "test_*.py"
+go test -race ./...
 go build ./...
-agentsync --check
+go vet ./...
 ```
 
 tag 发布由 GoReleaser 构建。发布 Homebrew cask 前，需要创建 `x0c/homebrew-tap` 仓库，并配置可推送该 tap 的 `HOMEBREW_TAP_GITHUB_TOKEN` secret。

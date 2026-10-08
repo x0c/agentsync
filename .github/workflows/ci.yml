@@ -35,6 +35,17 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Check repository text and documentation
+        run: python scripts/check_repository.py
+
+      - name: Test repository checks
+        run: python -m unittest discover -s scripts -p "test_*.py"
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:

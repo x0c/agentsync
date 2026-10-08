@@ -1,328 +1,123 @@
-# agentsync 同步机制知识库
+# Synchronization knowledge base
 
-## §0 目录索引
+This document owns synchronization mechanisms and preservation boundaries. [Repository instructions](../AGENTS.md) own contribution rules; the [workflow guide](AGENTSYNC_GUIDE.md) owns commands, report states, validation, and releases.
 
-| § | 标题 | 定位 |
-|---|------|------|
-| §1 | 机制背景与核心概念 | 首次接触同步机制时读 |
-| §1.5 | 架构概览 | 快速建立调用链和对象关系 |
-| §2 | 核心流程 | 理解规范文件、Skill 与 MCP 如何收敛 |
-| §2.5 | 物理路径速查 | 直接定位代码目录和文件 |
-| §3 | 代码入口索引 | 按任务场景找入口 |
-| §4 | 数据与持久化入口 | 理解文件系统状态和备份落点 |
-| §5 | 任务与外部流程入口 | 理解 CLI、测试、CI、发布配置 |
-| §6 | 核心规则与隐性约束 | 改代码前必扫的 AI 易错点 |
-| §7 | 验证路径 | 改完后如何验证正确性 |
-| §8 | 关联文档 | 跨文档联读指引 |
-| §9 | 覆盖度与待补充项 | 了解文档置信度和缺口 |
+## Ownership and architecture
 
-## §1 机制背景与核心概念
+Canonical instructions (`AGENTS.md`), complete skill directories (`skills/`), MCP definitions (`mcp.json`), and optional policy (`sync-policy.json`) live under `~/.config/agentsync/`. Runtime entries expose that content in each tool's format. Canonical content remains complete; policy changes only the view written to a runtime.
 
-agentsync 的同步机制围绕“统一源”和“工具入口”展开。统一源保存真实内容，工具入口只负责让各工具读到统一源。
-
-核心概念：
-
-- 规范统一源：`~/.config/agentsync/AGENTS.md`。
-- Skill 统一源：`~/.config/agentsync/skills`。
-- MCP 统一源：`~/.config/agentsync/mcp.json`。
-- 规范目标入口：Codex、OpenCode、Claude Code、Gemini、Qwen、Copilot、Kimi Code、Grok、Amp、Crush、Goose、Factory、iFlow、Kilo、dsh（DeepSeek Harness）、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode 等工具的全局指令文件，以及通用跨工具入口 `~/.agents/AGENTS.md`。完整清单见 `defaultGlobalConfig()`。Cursor 为 `~/.cursor/rules/AGENTS.mdc`（`Mode: cursor`）。
-- Skill 目标入口：各工具的用户 skill 根目录。
-- MCP 目标入口：各已安装工具的用户级 MCP 配置（独立文件整段覆盖，或综合配置只改 MCP key）。iFlow 与 `~/.agents` 无 MCP 入口（dsh 以 managed 块写 host 层 patch 文件）。完整清单与 schema 见 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)。
-- 安装门控（Detect）：每个规范/Skill/MCP 入口都带一个 `Detect` 标志目录，取该工具的用户级主目录（如 `~/.codex`、`~/.joycode`）。标志目录不存在即视为该工具未安装，`syncTarget()` / `syncSkillRoot()` / `syncMCPTarget()` 直接返回 `skipped`，不创建任何目录或文件。这样一台机器上只会为真正装了的工具建立入口。
-- 仓库级源：当前 Git 仓库的 `AGENTS.md`。
-- 仓库级目标：当前 Git 仓库的 `CLAUDE.md`。
-- 备份目录：`~/.config/agentsync/backups/`。每次真实同步共用一个时间戳目录（`YYYYMMDD-HHMMSS`，同秒冲突时加 `-01` 后缀），内含路径清洗后的载荷和 `manifest.json`（原始绝对路径 + `file`/`symlink`/`dir`）。`--rollback` 按该清单还原。
-
-同步机制的安全原则是：先保留已有内容，再替换入口。文件内容通过合并或草稿处理，目录内容通过复制到统一源或备份后替换。
-
-## §1.5 架构概览
+`Detect` is each runtime's installation directory. A nonempty, absent `Detect` path must return `skipped` before any write. Use the runtime home rather than its skill subdirectory: an installed runtime may not have created its skill directory yet. In particular, do not create JoyCode's home merely to write MCP configuration, because doing so can interfere with the runtime's legacy migration.
 
 ```mermaid
 flowchart TD
     CLI[main.go] --> Run[Run]
-    Run -->|--rollback| Restore[runRollback]
+    Run -->|rollback| Restore[runRollback]
     Run --> Config[defaultGlobalConfig / repoConfig]
     Config --> Sync[syncConfig]
-    Sync --> Target[syncTarget]
+    Sync --> Instructions[syncTarget]
     Sync --> Skills[syncSkills]
     Sync --> MCP[syncMCP]
     Skills --> Policy[loadSyncPolicy]
     MCP --> Policy
-    Target --> Merge[appendImportedContent / createMergeDraft]
-    Target --> Backup[backupFile / backupAny]
-    Target --> Alias[createAlias]
-    Skills --> Discover[discoverSkills]
+    Instructions --> Merge[appendImportedContent]
+    Instructions --> Backup[backupFile / backupAny]
+    Instructions --> Alias[createAlias]
     Skills --> Preserve[preserveHiddenSkillEntries]
     Skills --> Materialize[materializeCanonicalSkillLinks]
     Skills --> Root[syncSkillRoot]
-    MCP --> Extract[extractMCPServers]
-    MCP --> Apply[applyMCPToFile]
     Root --> Backup
     Root --> Alias
+    MCP --> Extract[extractMCPServers]
+    MCP --> Apply[applyMCPToFile]
     Apply --> Backup
     Restore --> Backup
 ```
 
-下图仅画出部分入口，完整清单以 `defaultGlobalConfig()` 为准；每条边只有在对应工具已安装（`Detect` 标志目录存在）时才会真正建立。
+## Instructions and aliases
 
-```mermaid
-flowchart LR
-    Source[规范统一源 AGENTS.md] --> Codex[~/.codex/AGENTS.md]
-    Source --> OpenCode[~/.config/opencode/AGENTS.md]
-    Source --> Claude[~/.claude/CLAUDE.md]
-    Source --> Gemini[~/.gemini/GEMINI.md]
-    Source --> JoyCode[~/.joycode/AGENTS.md]
-    Source --> Etc1[... 其余工具]
-    Source --> Agents[~/.agents/AGENTS.md]
-    SkillSource[Skill 统一源 skills/] --> ClaudeSkills[~/.claude/skills]
-    SkillSource --> CodexSkills[~/.codex/skills]
-    SkillSource --> OpenCodeSkills[~/.config/opencode/skills]
-    SkillSource --> JoyCodeSkills[~/.joycode/skills]
-    SkillSource --> Etc2[... 其余工具]
-    SkillSource --> AgentsSkills[~/.agents/skills]
-    MCPSource[MCP 统一源 mcp.json] --> CursorMCP[~/.cursor/mcp.json]
-    MCPSource --> ClaudeMCP["~/.claude.json mcpServers"]
-    MCPSource --> CodexMCP["~/.codex/config.toml mcp_servers"]
-    MCPSource --> Etc3[... 其余已安装工具]
-```
+When the canonical source is missing, readable runtime entries can initialize it. Each installed target then follows the `syncTarget()` state machine: absent targets are created, correct links report `ok`, and broken/wrong links or differing files are repaired according to check/apply mode.
 
-## §2 核心流程
+Preserve unique user-written content before replacement by importing it; back up replaced entries. Reviewed replacement content can be prepared manually and adopted with `--adopt`; the current synchronization path does not generate merge drafts automatically. Ordinary differing files merge by default. `--force` permits direct replacement after backup and must not become the default.
 
-### 规范文件收敛
+Files marked `<!-- managed-by: agentsync` are generated copies, including Cursor `.mdc` rules. If stale, replace them from the canonical source; never import their old body back into it. `sameContent()` strips managed markers and Cursor frontmatter. An equivalent ordinary file reports `ok` unless forced.
 
-1. `syncConfig()` 检查统一源是否存在。
-2. 统一源不存在时，收集可读目标入口内容，用 `createSourceFromFiles()` 创建统一源。
-3. 对每个规范目标入口执行 `syncTarget()`。
-4. 目标不存在时，创建指向统一源的别名。
-5. 目标是正确链接时，报告 `ok`。
-6. 目标是错误链接、断链、普通文件或可替换文件时，按检查模式/真实模式分支处理。
-7. 真实模式下，替换前先备份；有独特内容时先追加到统一源或生成合并草稿。
+Alias fallback order is symlink, Windows hardlink, then managed copy. Global links use absolute resolved paths. Repository mode uses a relative `CLAUDE.md -> AGENTS.md` link so moving a checkout remains safe. Cursor is an explicit exception to bare aliases: its managed `.mdc` requires `alwaysApply` frontmatter.
 
-`syncTarget()` 是规范文件收敛中最复杂的状态机，状态包括 `skipped`（runtime 未安装）、`missing`、`ok`、`broken-link`、`wrong-link`、`blocked`、`replaceable`、`mergeable`、`linked`、`repaired`、`replaced`、`merged`。其中 `skipped` 在方法最前面判定：`target.Detect` 非空且标志目录不存在时立即返回，不进入后续任何写路径。
+Repository and batch modes manage only repository instruction entries. They must not modify global instructions, skills, or MCP configuration.
 
-### Skill 根目录收敛
+## Skills
 
-1. `syncSkills()` 从每个工具侧 Skill 根目录发现合法 skill。
-2. 统一 Skill 源不存在时创建目录，检查模式只报告。
-3. `preserveHiddenSkillEntries()` 先复制隐藏目录，例如 Codex `.system`。
-4. `materializeCanonicalSkillLinks()` 把统一源内部的 skill symlink 物化为真实目录。
-5. 缺失的工具侧 skill 复制到统一源。
-6. 加载 `sync-policy.json` 的 `skills` 段（缺省 = 不限制）。
-7. `syncSkillRoot()`：无有效过滤时，将工具侧 Skill 根目录整体替换为指向统一源的别名；有过滤时改为真实目录，只为允许的 skill 建指向统一源的子软链（隐藏目录从统一源复制保留）。
+`syncSkills()` discovers directories containing `SKILL.md`, preserves hidden runtime content such as `.system`, materializes ordinary skill symlinks in the canonical source into real directories, and imports missing skills before replacing runtime roots.
 
-统一源 `skills/` 始终是全集；策略只影响写出到各工具。从过滤视图切回全集时，备份后恢复为根目录软链。
+Without effective policy filtering, a runtime skill root aliases the entire canonical root. This makes additions, deletions, and renames visible immediately. With filtering, it becomes a real directory containing symlinks only for allowed skills, plus preserved hidden directories. Removing filtering restores the whole-root alias after backup. Always creating individual skill links would reintroduce stale deletions and renames.
 
-### MCP 配置收敛
+Hidden directories are excluded from ordinary skill discovery but retained by `preserveHiddenSkillEntries()`. They also participate in watch fingerprints. Never treat all dot-directories as disposable.
 
-1. `syncConfig()` 在规范入口同步前，向全局 `AGENTS.md` 幂等注入 MCP 托管说明（含 `sync-policy.json` 提示）。
-2. `syncMCP()` 在统一源 `mcp.json` 不存在时，按已安装目标清单做按名并集导入（先到先得，**大小写不敏感**，避免 `Mobbin`/`mobbin` 各写一份），再写出统一源。**策略不参与导入**。
-3. 对每个 MCP 目标：Detect 不存在则 `skipped`；已安装则先按 `sync-policy.json` 的 `mcp` 段过滤，再按 dialect 翻译后写入。独立 MCP 文件整段覆盖；综合配置只改 MCP key。**Codex 桌面捆绑的本机服务器**（如 `node_repl`、`computer-use`）只写回 Codex，不扩散到其他工具。
-4. 服务器集合已与（过滤后的）统一源语义一致则 `ok`，不重写热文件；Detail 可带 `filtered out: …`。
-5. `--check` 只报告，不写 `mcp.json`、目标文件、ignore 文件或 `AGENTS.md` 注入。
-6. 配置根若有 `.git`，补 `.gitignore`；若有 `.stfolder`，补 `.stignore`。两份都忽略 `mcp.json`、`backups/`、`merge-drafts/`（策略文件可同步，不强制 ignore）。
-7. 空文件或缺少 `mcpServers` 对象的统一源直接报错，不覆盖目标。`--watch` 遇到空集合且已安装工具仍有服务器时拒绝写出。
+### Known filtering limitations
 
-Pi keeps the stable policy key `pi`. Optional top-level `piMCP` in `sync-policy.json` selects `auto` (default), `native`, or `adapter`; invalid values fail validation. In automatic mode, each sync selects native MCP unless an enabled `pi-mcp-adapter` package/extension is found. Native updates preserve top-level settings and server `exposure`, `toolExposure`, `oauth`, `timeout`, and `enabled`; removed servers still disappear. Adapter-owned files are untouched. See [MCP paths](agent_runtime_mcp_paths.md#pi-earendil-workspi) for migration and compatibility limits.
+- Codex can discover skills through both its own skill root and `~/.agents/skills`. Filtering only the Codex target does not hide a skill available through the shared root. To disable it in Codex, also set `[[skills.config]]` with `name = "<skill>"` and `enabled = false` in Codex configuration. Name-based disabling was verified with Codex 0.159; verify the installed version before changing this workaround.
+- `materializeFilteredSkillRoot()` copies hidden directories only when absent. Existing filtered-root `.system` content is a snapshot, not a continuously refreshed canonical view. Updating canonical hidden content currently requires synchronizing that copy separately; preserve any runtime-owned changes when doing so.
 
-仓库模式的 `repoConfig()` 不填 `MCPSource`，因此 `--repo` / `--all` 不会动用户级 MCP。落点与转换规则以 [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md) 为准。
+Follow-up: support Codex name-based disable entries through a safe key merge, and reconcile hidden-copy updates without discarding runtime changes. These are recorded limitations, not implemented features.
 
-### 仓库级收敛
+## MCP
 
-仓库模式只处理当前仓库：
+Global synchronization injects the English canonical-source notice into `AGENTS.md` before exposing it to runtimes. If `mcp.json` is absent, installed runtime configurations initialize it through a case-insensitive server-name union; the first encountered definition wins. Policy does not affect this import.
 
-```text
-CLAUDE.md -> AGENTS.md
-```
+For each installed target, apply name-based policy, exclude runtime-specific bundled servers where necessary, translate its dialect, and compare the resulting server set semantically. An equivalent set reports `ok` without rewriting a hot configuration file. Filtered names can appear in the detail.
 
-`repoConfig()` 使用相对链接模式，这样仓库移动位置后 `CLAUDE.md` 仍能指向同仓的 `AGENTS.md`。仓库模式不处理用户级统一源，也不处理 Skill 或 MCP。
+Dedicated MCP files can be replaced. Mixed files must preserve unrelated authentication, trust, settings, and state by changing only the MCP key. Use atomic writes in the same directory and account for concurrent runtime writes. Never apply whole-file instruction symlinks to mixed MCP configuration.
 
-## §2.5 物理路径速查
+New canonical MCP files use `0600`. Preserve existing target permissions. Configuration may contain plaintext tokens and private URLs: keep canonical MCP, backups, and merge drafts out of Git and Syncthing. When the canonical root has `.git` or `.stfolder`, `ensureSecretIgnores()` adds `mcp.json`, `backups/`, and `merge-drafts/` to the corresponding ignore file. Policy contains no tokens and can be synchronized separately.
 
-| 目录或文件（相对项目根） | 内容 | 关键类/文件数 |
-|---|---|---|
-| `main.go` | CLI 参数解析与进程退出 | `main()` |
-| `internal/agentsync/run.go` | 命令调度、规范目标同步、报告输出、批量仓库扫描 | `Run()`、`runOnce()`、`syncConfig()`、`syncTarget()`、`runAll()` |
-| `internal/agentsync/watch.go` | 后台轮询统一源与 Detect，有变化再执行全局同步 | `runWatch()`、`watchSnapshotOf()`、`watchSkipMCP()` |
-| `internal/agentsync/skills.go` | Skill 发现、隐藏目录保留、根目录替换/过滤物化、统一源物化 | `syncSkills()`、`syncSkillRoot()` |
-| `internal/agentsync/policy.go` | 按工具 allow/deny 过滤 MCP 与 Skill | `loadSyncPolicy()`、`filterServersForPolicy()`、`nameAllowed()` |
-| `internal/agentsync/mcp.go` | MCP 统一源导入、目标写入、AGENTS 注入、gitignore/stignore | `syncMCP()`、`syncMCPTarget()`、`ensureSecretIgnores()` |
-| `internal/agentsync/mcp_render.go` | 各 runtime MCP schema 翻译 | `renderMCPPayload()` |
-| `internal/agentsync/mcp_apply.go` | JSON/TOML/YAML 热文件合并写出 | `applyMCPToFile()` |
-| `internal/agentsync/merge.go` | 合并草稿、采纳草稿、内容追加 | `createMergeDraft()`、`adoptDraft()` |
-| `internal/agentsync/paths.go` | 默认路径、仓库路径、备份目录、路径展开 | `defaultGlobalConfig()`、`repoConfig()` |
-| `internal/agentsync/files.go` | 创建别名、备份文件/目录、删除/复制/内容比较 | `createAlias()`、`backupFile()`、`backupAny()` |
-| `internal/agentsync/backup_session.go` | 同步会话共用时间戳、`manifest.json`、戳列表 | `beginBackupSession()`、`endBackupSession()`、`resolveBackupStamp()` |
-| `internal/agentsync/restore.go` | `--rollback` 按清单还原 | `runRollback()`、`restoreManifestEntry()` |
-| `internal/agentsync/types.go` | Options、Config、TargetResult、RunReport 数据结构 | `Options`、`RunReport` |
-| `internal/agentsync/run_test.go` | 同步行为、幂等、Skill 目录、安全边界测试 | 多个 `Test*` |
+Empty files, malformed JSON, or a missing `mcpServers` object fail without overwriting targets. Watch also rejects an empty map if installed runtimes still have servers; intentional clearing requires a one-shot apply.
 
-## §3 本域代码入口索引
+Codex bundled local servers identified by `SkyComputerUseClient`, `node_repl`, or `NODE_REPL_*` remain in the canonical source for Codex round trips, but are not copied to other runtimes. Crush command substitution must be rejected, not passed through. iFlow and the shared `~/.agents` entry have no MCP output.
 
-| 场景 | 入口 | 类/方法/配置 | 说明 |
-|---|---|---|---|
-| 新增或修改 CLI 参数 | CLI 入口 | `main.go` 的 `main()`；`internal/agentsync/types.go` 的 `Options` | 参数必须写入 `Options` 后由 `Run()` 统一分发；`--watch` 走 `watchLoop()`；`--rollback` 走 `runRollback()` |
-| 修改全局默认路径 | 路径配置 | `defaultGlobalConfig()` | 同步源、目标入口和 Skill 入口都在这里定义 |
-| 修改仓库模式 | 仓库配置 | `repoConfig()`；`findRepoRoot()` | 只管理当前仓库 `CLAUDE.md` 到 `AGENTS.md` |
-| 修改规范文件同步 | 规范同步 | `syncConfig()`；`syncTarget()` | 决定缺失、冲突、合并、替换和报告状态 |
-| 修改 Skill 同步 | Skill 同步 | `syncSkills()`；`syncSkillRoot()`；`policy.go` | 负责导入已有 skill、根目录别名或过滤物化 |
-| 修改 MCP 同步 | MCP 同步 | `syncMCP()`；`defaultGlobalConfig()` 的 `MCPTargets`；`policy.go` | 负责统一源、schema 翻译、热文件 key 合并、空文件拒绝、ignore、按工具策略过滤；路径表见 agent_runtime_mcp_paths.md |
-| 修改按工具裁剪策略 | 同步策略 | `loadSyncPolicy()`；`sync-policy.json` | deny 优先；统一源仍是全集；改语义须同步 README/Guide |
-| 修改 watch 指纹或防抖 | 后台监听 | `watchLoop()`；`watchSkipMCP()`；`Options.SkipMCP` | `SkipMCP` 不是 CLI flag；只改 AGENTS/skills 时禁止写 MCP |
-| 修改合并策略 | 合并机制 | `appendImportedContent()`；`createMergeDraft()`；`adoptDraft()` | 影响已有内容如何进入统一源 |
-| 修改别名降级策略 | 文件机制 | `createAlias()`；`writeManagedCopy()` | 影响 symlink、hardlink、受管副本选择 |
-| 修改备份策略 | 文件机制 | `backupFile()`；`backupAny()`；`backupDir()`；`beginBackupSession()` | 影响用户可恢复性；改清单格式须保持 `--rollback` 可读 |
-| 修改回滚行为 | 恢复机制 | `runRollback()`；`restoreManifestEntry()` | 必须支持 `--check` 只读预览；还原前再备份；禁止自动再 sync |
-| 修改报告格式 | 输出机制 | `printReport()`；`TargetResult`；`RunReport` | README、测试和用户脚本可能依赖输出语义 |
+The [MCP path/format guide](agent_runtime_mcp_paths.md) owns dialect rules and runtime-specific detection. Pi retains policy key `pi`; `piMCP` selects `auto`, `native`, or `adapter`. Native writes preserve top-level settings and per-server `exposure`, `toolExposure`, `oauth`, `timeout`, and `enabled`; removed servers still disappear. Adapter-owned files are not renamed or rewritten as native configuration.
 
-## §4 数据与持久化入口
+## Policy
 
-本项目没有数据库。持久化对象全部是文件系统状态：
+`sync-policy.json` is separate from MCP secrets. Match runtime and server/skill names case-insensitively. Deny wins; a nonempty target allowlist applies next; otherwise use the section default (`allow` when omitted). Unknown runtime names warn rather than fail. Denied servers disappear from the written set rather than being emitted as disabled entries.
 
-| 对象 | 路径或来源 | 业务语义 | 改动注意 |
-|---|---|---|---|
-| 规范统一源 | `~/.config/agentsync/AGENTS.md` | 用户级指令唯一真实内容 | 不存在时可从已有工具入口导入 |
-| Skill 统一源 | `~/.config/agentsync/skills` | 所有工具共享的 skill 根目录 | 子目录必须包含 `SKILL.md` 才算 skill |
-| MCP 统一源 | `~/.config/agentsync/mcp.json` | 用户级 MCP 服务器唯一真实内容 | 本机文件，常含 token；有 `.git` / `.stfolder` 时必须 ignore；不要跨机默认同步 |
-| 同步策略 | `~/.config/agentsync/sync-policy.json` | 按 runtime Name 裁剪写出的 MCP / Skill | 不含 token，可跨机；缺省 = 全量；deny 优先 |
-| 工具规范入口 | Codex/OpenCode/Claude/Gemini/Qwen/Copilot/Kimi Code/Grok/Amp/Crush/Goose/Factory/iFlow/Kilo/Windsurf/Zed/CodeBuddy/Qoder/Junie/Kiro/JoyCode 全局指令文件，及通用 `~/.agents/AGENTS.md`（完整清单见 `defaultGlobalConfig()`） | 工具读取规范的入口 | 可为 symlink、hardlink 或受管副本；工具未安装（`Detect` 目录缺失）时不创建 |
-| 工具 Skill 入口 | 各工具 skill 根目录 | 工具发现 skill 的入口 | 默认根目录整体别名；有 skills 策略过滤时改为子软链物化；工具未安装时不创建 |
-| 仓库级入口 | `AGENTS.md`、`CLAUDE.md` | 项目文档入口 | `CLAUDE.md` 应只指向 `AGENTS.md` |
-| 备份 | `~/.config/agentsync/backups/<stamp>/` | 替换前恢复点；含 `manifest.json` | 替换文件和目录前必须写备份；一键还原用 `--rollback` |
-| 合并草稿 | `~/.config/agentsync/merge-drafts/` | 人工整理冲突内容 | 采纳后会替换统一源 |
+A missing policy preserves the unfiltered behavior. The canonical source always remains complete. Changes to policy semantics require aligned documentation and tests.
 
-## §5 任务与外部流程入口
+## Watch
 
-| 类型 | 标识 | 代码/配置入口 | 适用场景 |
-|---|---|---|---|
-| CLI 冒烟 | `agentsync --check` | `Run()`；`printReport()` | 验证真实机器状态不被修改 |
-| 单元测试 | `go test ./...` | `internal/agentsync/run_test.go`；`internal/agentsync/mcp_test.go`；`internal/agentsync/watch_test.go`；`internal/agentsync/restore_test.go` | 验证合并、链接、Skill 导入、MCP 同步、watch 安全边界、回滚和幂等 |
-| 构建 | `go build ./...` | `go.mod`；`main.go` | 验证 CLI 可编译 |
-| 安装 | `go install .` | Go toolchain | 覆盖本机 agentsync |
-| CI | GitHub Actions CI | `.github/workflows/ci.yml` | 多系统测试和构建 |
-| 发布 | CI gate → GoReleaser | `.github/workflows/ci.yml`；`.github/workflows/release.yml`；`.goreleaser.yml` | 先验证 tag 的同一提交通过三系统测试，再发布并更新 Homebrew cask |
+The watcher tracks canonical sources, policy, runtime presence, and Pi selection. Do not monitor runtime output files such as `~/.claude.json`: that creates write loops. Runtime-side MCP edits are not automatically imported.
 
-## §6 核心规则与隐性约束
+Instruction/skill-only changes with an unchanged policy set internal `Options.SkipMCP`. Policy changes must update both skills and MCP. `SkipMCP` is not a public CLI flag.
 
-- **AI 易错点**【检查模式】`--check` 必须只读。新增分支时，所有写文件、建目录、备份、删除、复制、重命名动作都必须被 `opts.Check` 拦住，否则预览命令会真实改用户目录。`--watch` 禁止与 `--check` 组合。`--rollback --check` 只报告 `restore`，不改线上文件。
-- **AI 易错点**【回滚与备份会话】真实同步必须 `beginBackupSession`/`endBackupSession`，同一轮写入共用一个戳并写 `manifest.json`。戳目录必须唯一（同秒用 `-01` 后缀），否则回滚前再备份会覆盖正在还原的载荷。`--rollback` 还原后禁止自动 `syncConfig`。无清单的旧戳只能人工恢复。
-- **AI 易错点**【watch 不盯热文件】`--watch` 只指纹统一源（`AGENTS.md` / `mcp.json` / `skills/` / `sync-policy.json`）和 Detect 目录是否存在。监视 `~/.claude.json` 会在每次 MCP 写出后触发回环。用户改工具侧 MCP 文件不会自动拉回统一源，这是故意的；不要做双向 MCP 合并。只改 AGENTS/skills 且策略未变时必须 `SkipMCP`，否则会把 UI 新加的服务器覆盖掉。策略文件变化必须同步 MCP（与 skills）。`SkipMCP` 不是 CLI flag。
-- **AI 易错点**【watch 失败不前进】`watchLoop()` 只有 `runOnce` 成功后才更新 last 指纹。失败、空 `mcp.json`、非法 JSON 都要下次重试，不能把坏内容钉成“已处理”。`--watch` 禁止与 `--force` 组合。Skill 指纹必须忽略 Syncthing 冲突文件 / `.DS_Store` / `.stversions`，但**不能**跳过 `.system` 这类隐藏 skill 目录（否则 Codex 系统 skill 改了不会自动同步）。目录 mtime 不能进指纹，否则跳过的冲突文件仍会触发同步。不要加 `service install` 子命令，也不要把 `--watch` 变成默认行为。
-- **AI 易错点**【按安装门控】每个规范/Skill/MCP 入口都带 `Detect` 标志目录（工具用户级主目录）。`syncTarget()` / `syncSkillRoot()` / `syncMCPTarget()` 必须在最前面判断：`Detect` 非空且目录不存在时返回 `skipped`，绝不为未安装的工具创建目录或文件。新增 runtime 时忘了给 `Detect`，会退化成“无条件为所有工具建目录”，正是本设计要避免的。`Detect` 用主目录而非 skill 子目录（工具装了但还没建 skill 目录时也应正常收敛）。JoyCode 的 MCP 尤其不能为了落盘去创建 `~/.joycode`。
-- **AI 易错点**【先导入再替换】替换现有规范文件或 Skill 目录前，必须先把可保留内容导入统一源或写入备份；不能为了“简化”直接删除目标入口。
-- **AI 易错点**【Skill 根目录策略】无 skills 策略过滤时，工具侧 Skill 入口是整个根目录指向统一源。有有效过滤时改为真实目录 + 允许 skill 的子软链；切回全集时恢复根软链。不要把「永远逐个 skill 链接」当成默认——无过滤时回退到逐个链接会重新引入删除/重命名不同步问题。
-- **AI 易错点**【sync-policy 与密钥分离】按工具裁剪写在 `sync-policy.json`，不要塞进 `mcp.json`。统一源始终是全集；deny 掉的服务器会从该工具配置里消失（不是写成 disabled）。策略不参与并集导入。
-- **AI 易错点**【Codex 的 Skill 过滤不完整】Codex 同时读取 `$CODEX_HOME/skills` 和 `~/.agents/skills`（源码 `codex-rs/ext/skills/src/host_roots.rs`）。`sync-policy.json` 的 `skills.targets.codex.deny` 只过滤前者，而 `~/.agents/skills` 默认整体软链到统一源，所以被 deny 的 skill 仍会出现在 Codex 里。要真正对 Codex 隐藏，还要在 `~/.codex/config.toml` 加 `[[skills.config]] name = "<skill>"` + `enabled = false`（Codex ≥ 0.159 支持按名选择）。2026-10-01 对 `gpt-image` 实测：只做 deny 不够，加上 config 后 `codex exec` 列出的 skill 中不再有它。
-- **AI 易错点**【过滤根里的隐藏目录只复制一次】`materializeFilteredSkillRoot()` 在目标已存在同名隐藏目录时跳过，所以过滤后的工具根里的 `.system` 是物化当时的一次性副本：之后修改统一源 `skills/.system/` 不会传到该工具，Codex 自己升级时也只改这份副本。改了统一源的 `.system` 文件后，要手动复制到 `~/.codex/skills/.system/`，或删掉该副本让下次同步重新复制。
-- **AI 易错点**【隐藏 Skill 目录】以点开头的隐藏 Skill 目录不参与普通 skill 发现，但要通过 `preserveHiddenSkillEntries()` 复制到统一源。过滤物化时也要从统一源复制隐藏目录。忽略它会丢掉 Codex `.system` 这类工具内部 skill。
-- **AI 易错点**【统一源内 symlink 物化】统一 Skill 源中普通 skill 如果是 symlink，需通过 `materializeCanonicalSkillLinks()` 变成真实目录，否则工具侧根目录统一后仍可能指向外部不稳定路径。
-- 【仓库模式边界】`--repo` 和 `--all` 只处理仓库内 `CLAUDE.md -> AGENTS.md`；不要让它们改用户级 `~/.config/agentsync/AGENTS.md`、Skill 根目录或 MCP 配置。
-- **AI 易错点**【MCP 禁止整文件 symlink 热文件】Claude `~/.claude.json`、Codex `config.toml`、OpenCode `opencode.json`、Zed `settings.json` 等混杂配置只能 key 合并。不要套规范文件的整文件 symlink 策略。不要读/写 `~/.claude/.mcp.json`。
-- **AI 易错点**【MCP 语义一致才 ok】比较的是翻译后的服务器集合，不是目标文件字节。已一致时禁止重写 Claude 热文件。Crush 遇到 `$(...)` 应 `blocked`，不要写进去。
-- **AI 易错点**【MCP 明文密钥】统一源常含 token；新建 `mcp.json` 用 `0600`，不要改已有目标文件权限，也不要把 `mcp.json` 提交进 git 或交给 Syncthing。配置根若有 `.git` / `.stfolder`，`ensureSecretIgnores()` 必须补 `mcp.json`、`backups/`、`merge-drafts/`。
-- **AI 易错点**【MCP 导入去重与捆绑隔离】并集导入按服务器名大小写不敏感先到先得。Codex 捆绑的本机服务器（`SkyComputerUseClient` / `node_repl` / `NODE_REPL_*` 环境变量）只写回 Codex；写进 Cursor/Claude/OpenCode 会在那些工具里启动失败。不要为了“统一源有就处处写”而拿掉这层过滤。
-- 【别名降级】`createAlias()` 的顺序是 symlink、Windows hardlink、受管副本。新增平台适配时不要跳过受管副本，否则低权限环境会失败。`Mode: cursor` 例外：必须写带 `alwaysApply` frontmatter 的受管 `.mdc`，禁止裸 symlink 到统一源（Cursor 不认无 frontmatter 的规则文件）。
-- **AI 易错点**【Cursor：落盘成功 ≠ Agent 已注入】`agentsync` 写好 `~/.cursor/rules/AGENTS.mdc`（且 Settings 能列出）只证明文件侧收敛成功。Cursor Agents Window / 以 `$HOME` 为 workspace 开 Agent 时，文件型全局规则常出现「UI 可见、系统提示未注入」；Skills（`~/.cursor/skills`）走另一套发现路径，可单独生效。这是 Cursor 产品侧已知问题，不是 agentsync 漏写。排查与 workaround 见 [AGENTSYNC_GUIDE.md](AGENTSYNC_GUIDE.md)「Cursor 规则已同步但 Agent 看不到」与 [agent_runtime_global_paths.md](agent_runtime_global_paths.md) Cursor 行。
-- 【内容一致即 ok】目标已是普通文件且 `sameContent`（会剥 managed marker / cursor frontmatter）为真时，除非 `--force`，应报告 `ok`，不要每次都 replace。
-- 【相对链接】仓库模式使用 `relative-link`；全局模式使用绝对路径。把仓库模式改成绝对链接会降低仓库移动后的可用性。
-- 【冲突处理】普通文件内容不同时，默认合并独特内容；`--force` 才允许在备份后直接替换。不要把 `--force` 行为变成默认行为。
-- **AI 易错点**【受管副本禁止回写统一源】带 `<!-- managed-by: agentsync` 的目标（含 Cursor `.mdc` 与 `writeManagedCopy` 退路）是统一源的衍生品，不是独立作者内容。正文与统一源不一致时必须**直接以统一源替换**，禁止走 `appendImportedContent`。否则「改统一源 → 再跑 agentsync」会把过期受管正文当独特内容整篇拼回统一源，造成重复。真人手写、无 managed marker 的普通文件仍走合并路径。
-- 【报告语义】`TargetResult.Status` 是用户判断下一步的接口。新增状态时要同步 README、Guide 和测试，避免用户看到无法解释的输出。
-- **AI 易错点**【用户可见字符串英文优先】CLI 输出（`Status`/`Detail`）、错误信息和注入用户文件的托管文本默认英文，禁止中英混杂（2026-09-23 用户裁定，覆盖此前中文输出规则；起因：dsh 同步的中文 Detail 与全英文报告混排）。代码注释、日志、开发诊断仍默认英文。改动已有英文用户输出前同步评估 README 与测试。
-- 【测试隔离】单测必须设置隔离配置根，不能依赖真实用户 home 下的 agentsync 状态。
-- 【低置信度】真实用户最常见的冲突场景、手工整理草稿的团队习惯、发布前人工验收口径缺少用户经验输入；后续需要从实际使用反馈补充。
+Only a successful `runOnce()` advances the successful fingerprint. Failed writes and invalid source content must be retried. Ignore Syncthing conflict files, `.DS_Store`, and `.stversions`, but include `.system`; exclude directory mtimes so ignored files cannot trigger updates. Watch remains opt-in, incompatible with forced replacement, and configured through the service templates rather than a service-install subcommand.
 
-## §7 常见易忽略条件与验证路径
+## Backups and rollback
 
-### 代码级验证
+File copies and instruction imports must close each opened file exactly once and propagate close failures along with any earlier write/copy error. Otherwise a failed final write can be reported as successful preservation. Watch fingerprint writes must also propagate errors instead of silently advancing. The Go contracts for [File.Close](https://pkg.go.dev/os#File.Close) and [errors.Join](https://pkg.go.dev/errors#Join) support single-close handling while retaining multiple errors.
 
-```bash
-go test ./...
-go build ./...
-```
+A real synchronization uses `beginBackupSession()` / `endBackupSession()`. Replaced paths share one unique timestamp directory containing payloads and `manifest.json`, with original absolute paths and file/symlink/directory types. Same-second sessions receive suffixes such as `-01`; reusing a stamp could overwrite the payload currently being restored.
 
-### CLI 冒烟验证
+Rollback supports read-only preview, backs up current entries before restoring, and does not call synchronization afterward. Old stamps without a manifest require manual restoration. Backups cover replaced entries in that session, not the entire machine.
 
-```bash
-go install .
-agentsync --check
-```
+## Implementation anchors
 
-检查点：
+| File | Responsibility |
+|---|---|
+| `main.go`, `types.go` | Flags, options, configuration, and report types |
+| `run.go` | Dispatch, instruction state machine, batch scanning, reports |
+| `paths.go` | Canonical sources, runtime targets, repository configuration, path expansion |
+| `files.go` | Aliases, managed copies, payload comparison, file/directory preservation |
+| `merge.go` | Source initialization, unique-content imports, reviewed-file adoption |
+| `skills.go`, `policy.go` | Skill discovery/import, hidden content, filtered views, policy evaluation |
+| `mcp.go`, `mcp_extract.go`, `mcp_server.go`, `mcp_json.go` | Source import, semantic comparison, MCP normalization, secret ignores |
+| `mcp_render.go`, `mcp_apply.go` | Dialect rendering and configuration-key updates |
+| `mcp_dsh.go`, `pi_mcp.go` | dsh managed patches and Pi output selection |
+| `watch.go` | Polling, fingerprints, debounce, retries |
+| `backup_session.go`, `restore.go` | Session manifests and rollback |
 
-- `--check` 输出为 `agentsync check`。
-- 不应新增备份文件。
-- 已收敛入口应显示 `ok`。
-- 未收敛入口应显示 `would ...` 类说明，而非真实写入结果。
+Paths other than `main.go` are under `internal/agentsync/`. Matching `_test.go` files exercise preservation, isolation, rollback, policy, idempotency, and dialect edge cases. Use the code graph for call relationships rather than duplicating a complete symbol inventory here.
 
-### 仓库模式验证
+## Verification boundaries
 
-```bash
-agentsync --repo --check
-```
+The [workflow guide](AGENTSYNC_GUIDE.md#development-validation) owns local commands and real-path smoke expectations. MCP tests additionally cover absent runtimes, malformed/empty sources preserving outputs, policy filtering, mixed-file state preservation, and watch's empty-map protection. Skill tests must cover hidden content and transitions between filtered and whole-root views.
 
-检查点：
-
-- Source 应为当前仓库的 `AGENTS.md`。
-- Results 只包含当前仓库的 `CLAUDE.md`。
-- 不应出现用户级 Skill 目录。
-
-### Skill 根目录验证
-
-```bash
-agentsync --check
-```
-
-检查点：
-
-- `Skills` 区块对已安装工具报告其 skill 根目录（如 `~/.claude/skills`、`~/.codex/skills`、`~/.config/opencode/skills`、`~/.agents/skills` 等）。
-- 已整体指向统一源时应显示 `ok` 或 skill directory symlink。
-- 真实目录但可替换时应显示 `replaceable`，真实运行前会备份。
-- 未安装工具（`Detect` 目录缺失）应显示 `skipped (runtime not installed)`，且不产生任何写入。
-
-### MCP 配置验证
-
-```bash
-agentsync --check
-```
-
-检查点：
-
-- 报告出现 `MCP:` 区块。
-- 未安装工具 `skipped`，不创建 Detect 目录。
-- 已与统一源语义一致的入口显示 `ok`。
-- `--check` 不写 `~/.config/agentsync/mcp.json` 或各工具 MCP 文件。
-- 空文件 / 缺 `mcpServers` 的统一源应报错，已安装工具的 MCP 文件内容不变。
-- `--watch` 遇到 `"mcpServers": {}` 且工具侧仍有服务器时应拒绝写出；手动 `agentsync` 才允许按空集合覆盖。
-
-### 发布配置验证
-
-```bash
-goreleaser check
-```
-
-发布链路改动还需要在 GitHub Actions 中确认 release workflow 和 Homebrew tap 更新结果；这部分已登记为 backlog，当前文档只覆盖入口。
-
-## §8 关联文档
-
-- [AGENTSYNC_GUIDE.md](AGENTSYNC_GUIDE.md)：命令使用、`--watch` / systemd、验证、发布入口；Cursor「已同步但 Agent 看不到」、MCP 被清空排查。
-- [agent_runtime_global_paths.md](agent_runtime_global_paths.md)：各 runtime 全局路径调研；Cursor `~/.cursor/rules` 注入存疑点。
-- [agent_runtime_mcp_paths.md](agent_runtime_mcp_paths.md)：MCP 用户级落点、写入策略与 schema 转换。
-- [../README.md](../README.md)：公开英文用法。
-- [../README.zh-CN.md](../README.zh-CN.md)：公开中文用法。
-- [../AGENTS.md](../AGENTS.md)：项目文档导航、领域地图和 backlog。
-
-## §9 覆盖度与待补充项
-
-- 代码推断覆盖：已覆盖 `Run()`、`syncConfig()`、`syncTarget()`、`syncSkills()`、`syncSkillRoot()`、`syncMCP()`、路径配置、备份、别名和合并草稿。
-- depth_scanner 信号：机械信号 1 条，为测试中的幂等性提示；已写入 `--check`、重复运行应收敛为 `ok` 和测试隔离规则。其余状态机、并发、事件、数据库、JSON 字段信号均无。
-- 领域语言统一：正文统一使用“规范统一源”“Skill 统一源”“工具入口”“仓库模式”；代码名保留为实现入口。
-- 多源证据补强：已读取 README、中文 README、既有 docs、CI、Release workflow、GoReleaser 配置、图谱架构摘要。
-- Git 弱信号：可用但样本很少，只有 5 个提交；Skill 同步和 release workflow 是热点候选，不作为独立业务规则来源。
-- 数据库证据：本仓无数据库配置，未执行数据库 catalog。
-- Q&A 补充：缺少用户经验输入；§6 的低置信度条目需要后续真实使用经验补齐。
-- 待补充：发布与安装链路、测试隔离与安全验证已登记到根 `AGENTS.md` backlog。
-- 环境改进待办（2026-10-01）：对 Codex 的 skill deny 应同时写出 `~/.codex/config.toml` 的 `[[skills.config]] enabled = false`（键级合并，与 MCP 同法），并在统一源隐藏目录变化时刷新过滤根里的副本；在此之前按 §6 两条易错点手动处理。
-
-<!-- 该文档由 doc-init 更新于 2026-06-30；定位：AI 修改 agentsync 同步机制前的快速参考文档 -->
-
-<!-- 该文档整理/压缩于 2026-09-05 -->
+A synchronized file proves filesystem behavior, not runtime prompt loading, approval, OAuth, or remote connectivity. Cursor injection and native Pi sign-in require their own runtime acceptance. Historical upstream observations in the path guides are version-specific; consult current official documentation before changing implementation contracts.

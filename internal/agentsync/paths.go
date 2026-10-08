@@ -16,10 +16,10 @@ func defaultGlobalConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	// 每个 runtime 一条：Detect 是该工具的用户级主目录，只有它已存在（即用户装了该工具）
-	// 才会为其创建规范入口 / skill 根目录别名；未安装的工具一律跳过，不留任何文件。
+	// Detect uses each runtime home directory; create instruction and skill aliases
+	// only when that directory already exists. Absent runtimes leave no files behind.
 	targets := []Target{
-		// 头部 CLI Agent
+		// Major CLI agents
 		{Path: "~/.codex/AGENTS.md", Mode: "link", Detect: "~/.codex"},
 		{Path: "~/.config/opencode/AGENTS.md", Mode: "link", Detect: "~/.config/opencode"},
 		{Path: "~/.claude/CLAUDE.md", Mode: "claude", Detect: "~/.claude"},
@@ -27,7 +27,7 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.qwen/QWEN.md", Mode: "link", Detect: "~/.qwen"},
 		{Path: "~/.copilot/copilot-instructions.md", Mode: "link", Detect: "~/.copilot"},
 		{Path: "~/.kimi-code/AGENTS.md", Mode: "link", Detect: "~/.kimi-code"},
-		// 开源 / 独立 CLI Agent
+		// Open-source and independent CLI agents
 		{Path: "~/.grok/AGENTS.md", Mode: "link", Detect: "~/.grok"},
 		{Path: "~/.config/amp/AGENTS.md", Mode: "link", Detect: "~/.config/amp"},
 		{Path: "~/.config/crush/CRUSH.md", Mode: "link", Detect: "~/.config/crush"},
@@ -37,44 +37,44 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.config/kilo/AGENTS.md", Mode: "link", Detect: "~/.config/kilo"},
 		{Path: filepath.Join(piAgentDir(), "AGENTS.md"), Mode: "link", Detect: piAgentDir()},
 		{Path: "~/.dsh/AGENTS.md", Mode: "link", Detect: "~/.dsh"},
-		// IDE / 编辑器系 Agent
+		// IDE and editor agents
 		{Path: "~/.cursor/rules/AGENTS.mdc", Mode: "cursor", Detect: "~/.cursor"},
 		{Path: "~/.codeium/windsurf/memories/global_rules.md", Mode: "link", Detect: "~/.codeium/windsurf"},
 		{Path: "~/.config/zed/AGENTS.md", Mode: "link", Detect: "~/.config/zed"},
-		// 大厂自研 Agent
+		// Vendor-specific agents
 		{Path: "~/.codebuddy/CODEBUDDY.md", Mode: "link", Detect: "~/.codebuddy"},
 		{Path: "~/.qoder/AGENTS.md", Mode: "link", Detect: "~/.qoder"},
 		{Path: "~/.junie/AGENTS.md", Mode: "link", Detect: "~/.junie"},
 		{Path: "~/.kiro/steering/AGENTS.md", Mode: "link", Detect: "~/.kiro"},
 		{Path: "~/.joycode/AGENTS.md", Mode: "link", Detect: "~/.joycode"},
-		// 通用跨工具入口（约定俗成的 ~/.agents，仅在用户已建立时才收敛）
+		// Shared ~/.agents entry, synchronized only when it already exists
 		{Path: "~/.agents/AGENTS.md", Mode: "link", Detect: "~/.agents"},
 	}
 	skillTargets := []SkillTarget{
-		// 头部 CLI Agent
+		// Major CLI agents
 		{Name: "claude", Path: "~/.claude/skills", Detect: "~/.claude"},
 		{Name: "codex", Path: "~/.codex/skills", Detect: "~/.codex"},
 		{Name: "opencode", Path: "~/.config/opencode/skills", Detect: "~/.config/opencode"},
 		{Name: "qwen", Path: "~/.qwen/skills", Detect: "~/.qwen"},
 		{Name: "copilot", Path: "~/.copilot/skills", Detect: "~/.copilot"},
 		{Name: "kimi-code", Path: "~/.kimi-code/skills", Detect: "~/.kimi-code"},
-		// 开源 / 独立 CLI Agent
+		// Open-source and independent CLI agents
 		{Name: "grok", Path: "~/.grok/skills", Detect: "~/.grok"},
 		{Name: "amp", Path: "~/.config/amp/skills", Detect: "~/.config/amp"},
 		{Name: "crush", Path: "~/.config/crush/skills", Detect: "~/.config/crush"},
 		{Name: "factory", Path: "~/.factory/skills", Detect: "~/.factory"},
 		{Name: "iflow", Path: "~/.iflow/skills", Detect: "~/.iflow"},
 		{Name: "aider-desk", Path: "~/.aider-desk/skills", Detect: "~/.aider-desk"},
-		// IDE / 编辑器系 Agent
+		// IDE and editor agents
 		{Name: "cursor", Path: "~/.cursor/skills", Detect: "~/.cursor"},
 		{Name: "windsurf", Path: "~/.codeium/windsurf/skills", Detect: "~/.codeium/windsurf"},
-		// 大厂自研 Agent
+		// Vendor-specific agents
 		{Name: "codebuddy", Path: "~/.codebuddy/skills", Detect: "~/.codebuddy"},
 		{Name: "qoder", Path: "~/.qoder/skills", Detect: "~/.qoder"},
 		{Name: "kiro", Path: "~/.kiro/skills", Detect: "~/.kiro"},
 		{Name: "joycode", Path: "~/.joycode/skills", Detect: "~/.joycode"},
 		{Name: "dsh", Path: "~/.dsh/skills", Detect: "~/.dsh"},
-		// 通用跨工具入口（Pi 等走 ~/.agents/skills）
+		// Shared skill entry used by Pi and other runtimes
 		{Name: "agents", Path: "~/.agents/skills", Detect: "~/.agents"},
 	}
 	for i := range targets {
@@ -133,8 +133,8 @@ func defaultGlobalConfig() (Config, error) {
 		{Name: "joycode", Path: "~/.joycode/joycode-mcp.json", Detect: "~/.joycode", Dialect: "cursor", Format: "json", Mode: "file"},
 		// Select native MCP or the adapter's shared file from Pi package selection.
 		{Name: "pi", Path: filepath.Join(piAgentDir(), "mcp.json"), Detect: piAgentDir(), Dialect: "pi-auto", Format: "json", Mode: "key"},
-		// dsh 无独立 mcp.json：MCP 以 dsh-mcp-client 插件实例写进 host 层 cordis.patch.yml
-		// 的 agentsync managed 块（块外用户内容字节级不动）。DSH_HOME 可改根目录。
+		// dsh MCP uses plugin instances in the host-level cordis.patch.yml.
+		// Preserve bytes outside the managed block; DSH_HOME can override the root.
 		{Name: "dsh", Path: dshPatchPath(), Detect: dshHomeDir(), Dialect: "dsh", Format: "yaml", Mode: "patch"},
 	}
 	for i := range mcpTargets {
@@ -198,14 +198,6 @@ func configRoot() (string, error) {
 		return "", err
 	}
 	return p, nil
-}
-
-func mergeDraftDir() (string, error) {
-	root, err := configRoot()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(root, "merge-drafts"), nil
 }
 
 func backupDir() (string, error) {

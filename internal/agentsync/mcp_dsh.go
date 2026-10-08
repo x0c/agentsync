@@ -15,10 +15,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// dsh（DeepSeek Harness）的 MCP 没有独立 mcp.json：一个 server 就是
-// host 层 cordis.patch.yml 里一个 @deepseek-ai/dsh-mcp-client 插件实例。
-// agentsync 只写自己 marker 包裹的块，块外字节级不动（patch 文件里常见
-// !!js 自定义 tag，全文件 YAML 回写极易弄坏用户内容）。
+// dsh (DeepSeek Harness) has no dedicated mcp.json; each server is a
+// host-level @deepseek-ai/dsh-mcp-client instance in cordis.patch.yml.
+// agentsync changes only its marked block, preserving all other bytes because
+// custom !!js tags make rewriting the entire YAML file unsafe.
 
 const (
 	dshMCPClientName = "@deepseek-ai/dsh-mcp-client"
@@ -28,8 +28,8 @@ const (
 
 var dshServerNameRe = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
 
-// serverName 行扫描只看字面标量（schema 要求 serverName 是普通名字），
-// 不做 YAML 解析，因此块外的 !!js 等写法不会影响我们。
+// Scan literal serverName scalars as required by the naming contract.
+// Avoid YAML parsing so !!js tags outside the block do not affect extraction.
 var dshServerNameLineRe = regexp.MustCompile(`(?m)^\s*serverName:\s*(\S+)\s*$`)
 
 func dshHomeDir() string {
@@ -112,7 +112,7 @@ func dshPatchEntry(srv mcpServer) (map[string]any, error) {
 	}, nil
 }
 
-// dshManagedSpan 返回现有 managed 块的起止（行首到行尾，含换行）。
+// dshManagedSpan returns the existing managed block span, including line endings.
 func dshManagedSpan(data []byte) (start, end int, ok bool) {
 	lines := strings.SplitAfter(string(data), "\n")
 	off := 0
@@ -164,7 +164,7 @@ func spliceDshPatchBlock(existing, block []byte) []byte {
 	return out
 }
 
-// dshPatchIsEmpty 判定 patch 文件是否等价于空（只有注释/空白/`[]`）。
+// dshPatchIsEmpty reports whether a patch contains only comments, whitespace, or [].
 func dshPatchIsEmpty(data []byte) bool {
 	for _, line := range strings.Split(string(data), "\n") {
 		trim := strings.TrimSpace(line)
@@ -189,8 +189,8 @@ func dshLeadingComments(data []byte) []byte {
 	return out
 }
 
-// extractDshServers 只解析我们自己 managed 块内的条目（我们生成的内容，
-// 无 !!js），块外手写条目不参与并集导入，避免解析用户自定义 tag 失败。
+// extractDshServers parses only entries generated inside our managed block.
+// Manual entries outside it are excluded to avoid parsing custom YAML tags.
 func extractDshServers(data []byte) ([]mcpServer, error) {
 	start, end, ok := dshManagedSpan(data)
 	if !ok {
@@ -251,8 +251,8 @@ func orEmpty(v any) any {
 	return v
 }
 
-// dshOutsideServerNames 扫描 managed 块之外手写的同名 server（行扫描，
-// 不解析 YAML，因此块外 !!js 不影响我们）。
+// dshOutsideServerNames scans manually configured servers outside the managed block.
+// Line scanning avoids interpreting custom !!js tags.
 func dshOutsideServerNames(data []byte) []string {
 	outside := string(data)
 	if start, end, ok := dshManagedSpan(data); ok {
@@ -271,7 +271,7 @@ func dshOutsideServerNames(data []byte) []string {
 	return names
 }
 
-// dshClientDepProfiles 返回 profiles 下声明了 dsh-mcp-client 依赖的 profile 名。
+// dshClientDepProfiles returns profiles that declare the dsh-mcp-client dependency.
 func dshClientDepProfiles() []string {
 	entries, err := os.ReadDir(filepath.Join(dshHomeDir(), "profiles"))
 	if err != nil {
@@ -324,7 +324,7 @@ func syncDshMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropp
 	}
 	detail := func(base string) string { return formatFilteredDetail(base, dropped) }
 
-	// Codex 捆绑本机 server（node_repl / computer-use 等）写进 dsh 会启动失败，照例过滤。
+	// Filter Codex bundled local servers, which cannot start in dsh.
 	servers = filterServersForDialect(servers, "dsh")
 
 	depProfiles := dshClientDepProfiles()
@@ -419,8 +419,8 @@ func syncDshMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropp
 	return result, backup, nil
 }
 
-// dshValidatePatch 用 dsh 自带的 --dump-config 做写后自检（只读，不启动服务）。
-// 返回值是实际校验的 profile 名；空串表示跳过校验（本机无 dsh 可执行文件或无 profile）。
+// dshValidatePatch checks a written patch with --dump-config without starting services.
+// An empty profile name means validation was skipped because dsh or profiles are absent.
 func dshValidatePatch() (string, bool) {
 	bin, err := exec.LookPath("dsh")
 	if err != nil {

@@ -3,62 +3,11 @@ package agentsync
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 )
-
-func createMergeDraft(source string, conflicts []string) (string, error) {
-	dir, err := mergeDraftDir()
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, time.Now().Format("20060102-150405")+"-merge.md")
-
-	var b strings.Builder
-	b.WriteString("# Unified Agent Instructions\n\n")
-	b.WriteString("Review this file, remove duplicates, then run:\n\n")
-	b.WriteString("```bash\n")
-	b.WriteString("agentsync --adopt ")
-	b.WriteString(shellQuote(path))
-	b.WriteString("\n```\n\n")
-
-	if pathExists(source) && isRegularFile(source) {
-		appendFileSection(&b, "Existing source", source)
-	}
-	for _, p := range conflicts {
-		if pathExists(p) && isRegularFile(p) {
-			appendFileSection(&b, "Imported from "+p, p)
-		}
-	}
-	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
-func appendFileSection(b *strings.Builder, title, path string) {
-	b.WriteString("## ")
-	b.WriteString(title)
-	b.WriteString("\n\n")
-	data, err := readPayload(path)
-	if err != nil {
-		b.WriteString("_Could not read file: ")
-		b.WriteString(err.Error())
-		b.WriteString("_\n\n")
-		return
-	}
-	b.Write(data)
-	if len(data) == 0 || data[len(data)-1] != '\n' {
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
-}
 
 func shellQuote(path string) string {
 	if path == "" {
@@ -172,11 +121,10 @@ func appendImportedContent(source, origin string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
 	if _, err := f.WriteString(b.String()); err != nil {
-		return false, err
+		return false, errors.Join(err, f.Close())
 	}
-	return true, nil
+	return true, f.Close()
 }
 
 func trimOuterWhitespace(data []byte) []byte {

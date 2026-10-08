@@ -245,7 +245,7 @@ func sortedSkillNames(skills map[string]string) []string {
 func syncSkillRoot(source string, targetSpec SkillTarget, opts Options, kept, dropped []string, filtered bool) (TargetResult, string, error) {
 	target := targetSpec.Path
 	result := TargetResult{Path: target}
-	// runtime 未安装时跳过，不创建其 skill 根目录别名。
+	// Skip absent runtimes without creating skill-root aliases.
 	if targetSpec.Detect != "" && !pathExists(targetSpec.Detect) {
 		result.Status = "skipped"
 		result.Detail = "runtime not installed"
