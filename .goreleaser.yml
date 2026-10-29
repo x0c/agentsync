@@ -61,9 +61,9 @@ homebrew_casks:
     license: MIT
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/agentsync"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/agentsync"]
           end
     commit_msg_template: "Brew cask update for {{ .ProjectName }} {{ .Tag }}"
 
