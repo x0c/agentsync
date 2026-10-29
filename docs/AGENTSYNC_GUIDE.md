@@ -141,7 +141,7 @@ Build into a temporary directory and exercise the real CLI with a temporary home
 4. An absent runtime remains absent; reports and generated notices are English.
 5. Repository preview reports only the checkout's instruction entry, without global skills or MCP.
 
-Run `python3 scripts/verify_sync.py` for the repeatable real-CLI safety suite, including the 17 review regressions, watch reconciliation, and a preview/apply/recheck smoke. It builds a temporary binary and uses disposable homes only. Pass `--binary /absolute/path/to/agentsync` to test an installed or downloaded artifact; `--evidence /temporary/log-directory` retains complete CLI output. This is filesystem acceptance, not runtime sign-in, network, or prompt-loading validation.
+Run `python3 scripts/verify_sync.py` for the repeatable real-CLI safety suite, including the 17 review regressions, watch reconciliation, and a preview/apply/recheck smoke. It builds a temporary binary and uses disposable homes only. Pass `--binary /absolute/path/to/agentsync` to test an installed or downloaded artifact; `--evidence /temporary/log-directory` retains complete CLI output. This is filesystem acceptance, not runtime sign-in, network, or prompt-loading validation. Windows rollback acceptance compares resolved link identity rather than raw `os.readlink()` strings: Python returns the Windows substitution path, which can carry a `\\\\?\\` prefix even when the restored link points to the correct directory ([Python contract](https://docs.python.org/3/library/os.html#os.readlink)).
 
 Use temporary `HOME`, `XDG_CONFIG_HOME`, and any runtime-specific root overrides; never point a write-mode smoke test at real user configuration. The synchronization knowledge base records additional MCP and skill edge cases.
 

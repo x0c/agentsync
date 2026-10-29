@@ -201,7 +201,7 @@ def case_rollback_directory(f):
     f.run("--check", "--rollback", stamp)
     assert snapshot(f.home) == before
     f.run("--rollback", stamp)
-    assert link.is_symlink() and os.readlink(link) == str(target)
+    assert link.is_symlink() and os.path.samefile(link, target)
     f.run("--rollback", "latest")
     assert link.is_dir() and not link.is_symlink()
     assert read(link / "assets/data.txt") == "KEEP_ASSET\n"
