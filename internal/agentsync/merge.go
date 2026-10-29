@@ -24,6 +24,10 @@ func adoptDraft(source, draft string, check bool) ([]string, error) {
 	if !pathExists(draftPath) {
 		return nil, fmt.Errorf("merge draft does not exist: %s", draftPath)
 	}
+	data, err := os.ReadFile(draftPath)
+	if err != nil {
+		return nil, err
+	}
 	if check {
 		return nil, nil
 	}
@@ -37,14 +41,13 @@ func adoptDraft(source, draft string, check bool) ([]string, error) {
 			backups = append(backups, backup)
 		}
 	}
-	data, err := os.ReadFile(draftPath)
-	if err != nil {
+	perm := os.FileMode(0o644)
+	if info, err := os.Stat(source); err == nil {
+		perm = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err := ensureParent(source); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(source, data, 0o644); err != nil {
+	if err := writeFileAtomic(source, data, perm); err != nil {
 		return nil, err
 	}
 	return backups, nil

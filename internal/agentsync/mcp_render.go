@@ -179,7 +179,7 @@ func renderCrush(servers []mcpServer) (map[string]any, error) {
 	out := map[string]any{}
 	for _, srv := range sortedMCPServers(servers) {
 		if mcpHasShellSubst(srv) {
-			return nil, fmt.Errorf("crush rejected server %q: value contains $(...)", srv.Name)
+			return nil, fmt.Errorf("crush rejected server %q: value contains shell command substitution", srv.Name)
 		}
 		entry := map[string]any{}
 		t := srv.inferredType()

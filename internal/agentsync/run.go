@@ -1,6 +1,7 @@
 package agentsync
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,16 +9,16 @@ import (
 )
 
 func Run(opts Options) error {
+	if err := opts.Validate(); err != nil {
+		return err
+	}
 	if opts.Watch {
-		if opts.Check || opts.Repo || opts.All != "" || opts.Adopt != "" || opts.Rollback != "" || opts.Force {
-			return fmt.Errorf("--watch cannot be combined with --check, --repo, --all, --adopt, --rollback, or --force")
-		}
 		return runWatch(opts)
 	}
 	return runOnce(opts)
 }
 
-func runOnce(opts Options) error {
+func runOnce(opts Options) (runErr error) {
 	if opts.Rollback != "" {
 		return runRollback(opts)
 	}
@@ -38,13 +39,13 @@ func runOnce(opts Options) error {
 			return err
 		}
 	}
-	if opts.Adopt != "" {
-		if !opts.Check {
-			if _, err := beginBackupSession(); err != nil {
-				return err
-			}
-			defer func() { _ = endBackupSession() }()
+	if !opts.Check {
+		if _, err := beginBackupSession(); err != nil {
+			return err
 		}
+		defer func() { runErr = errors.Join(runErr, endBackupSession()) }()
+	}
+	if opts.Adopt != "" {
 		backups, err := adoptDraft(cfg.Source, opts.Adopt, opts.Check)
 		if err != nil {
 			return err
@@ -62,20 +63,26 @@ func runOnce(opts Options) error {
 			report.Backups = append(report.Backups, r.Backups...)
 		}
 		printReport(report, opts)
-		return nil
-	}
-	if !opts.Check {
-		if _, err := beginBackupSession(); err != nil {
-			return err
-		}
-		defer func() { _ = endBackupSession() }()
+		return reportError(report)
 	}
 	report, err := syncConfig(cfg, opts)
 	if err != nil {
 		return err
 	}
 	printReport(report, opts)
-	return nil
+	return reportError(report)
+}
+
+func reportError(report RunReport) error {
+	var failures []error
+	for _, results := range [][]TargetResult{report.Results, report.SkillResults, report.MCPResults} {
+		for _, result := range results {
+			if result.Status == "blocked" {
+				failures = append(failures, fmt.Errorf("blocked %s: %s", result.Path, result.Detail))
+			}
+		}
+	}
+	return errors.Join(failures...)
 }
 
 func syncConfig(cfg Config, opts Options) (RunReport, error) {
@@ -118,6 +125,14 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 		}
 	}
 
+	// Complete imports before generating copies, regardless of target ordering.
+	if !opts.Check && !opts.Force {
+		for _, target := range cfg.Targets {
+			if _, err := importInstructionTarget(cfg.Source, target); err != nil {
+				return report, err
+			}
+		}
+	}
 	for _, target := range cfg.Targets {
 		result, backup, err := syncTarget(cfg.Source, target, opts)
 		if err != nil {
@@ -169,6 +184,17 @@ func readableContentPath(path string) string {
 	return ""
 }
 
+func importInstructionTarget(source string, target Target) (bool, error) {
+	if target.Detect != "" && !pathExists(target.Detect) {
+		return false, nil
+	}
+	origin := readableContentPath(target.Path)
+	if origin == "" || sameContent(source, origin) || isManagedAgentsyncFile(origin) {
+		return false, nil
+	}
+	return appendImportedContent(source, origin)
+}
+
 func syncTarget(source string, target Target, opts Options) (TargetResult, string, error) {
 	result := TargetResult{Path: target.Path}
 	// Skip absent runtimes without creating directories or files.
@@ -201,8 +227,13 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		if target.Mode == "cursor" {
 			if opts.Check {
 				result.Status = "wrong-link"
-				result.Detail = "would replace symlink with cursor-rule"
+				result.Detail = "would preserve unmanaged content and replace symlink with cursor-rule"
 				return result, "", nil
+			}
+			if !opts.Force {
+				if _, err := importInstructionTarget(source, target); err != nil {
+					return result, "", err
+				}
 			}
 			backup, err := backupFile(target.Path)
 			if err != nil {
@@ -276,10 +307,8 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 			}
 			return result, "", nil
 		}
-		if p := readableContentPath(target.Path); p != "" {
-			if _, err := appendImportedContent(source, p); err != nil {
-				return result, "", err
-			}
+		if _, err := importInstructionTarget(source, target); err != nil {
+			return result, "", err
 		}
 		backup, err := backupFile(target.Path)
 		if err != nil {
@@ -301,7 +330,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		result.Detail = "not a regular file"
 		return result, "", nil
 	}
-	if sameContent(source, target.Path) {
+	if sameContent(source, target.Path) && (target.Mode != "cursor" || isManagedAgentsyncFile(target.Path)) {
 		if !opts.Force {
 			result.Status = "ok"
 			if target.Mode == "cursor" {
@@ -333,14 +362,14 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 	}
 	// Replace managed copies and forced targets from the canonical source without importing them.
 	// Importing a stale managed body would duplicate old instructions in the source.
-	if opts.Force || target.Mode == "cursor" || isManagedAgentsyncFile(target.Path) {
+	if opts.Force || isManagedAgentsyncFile(target.Path) {
 		if opts.Check {
 			result.Status = "replaceable"
 			switch {
 			case opts.Force:
 				result.Detail = "would replace because --force was set"
 			case target.Mode == "cursor":
-				result.Detail = "would replace stale cursor-rule from source"
+				result.Detail = "would replace stale managed cursor-rule from source"
 			default:
 				result.Detail = "would replace stale managed copy from source"
 			}
@@ -407,7 +436,7 @@ func printReport(report RunReport, opts Options) {
 	}
 	fmt.Printf("agentsync %s\n\n", mode)
 	fmt.Printf("Source:\n  %s\n\n", report.Source)
-	if report.Repositories > 0 {
+	if report.Repositories > 0 || opts.All != "" {
 		fmt.Printf("Repositories:\n  %d\n\n", report.Repositories)
 	}
 	if len(report.Results) > 0 {
@@ -480,10 +509,21 @@ func runAll(opts Options) error {
 	if err != nil {
 		return err
 	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve scan root: %w", err)
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		return fmt.Errorf("inspect scan root: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("scan root is not a directory: %s", root)
+	}
 	var repos []string
 	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return fmt.Errorf("scan %s: %w", path, err)
 		}
 		name := d.Name()
 		if name == ".git" {
@@ -511,11 +551,13 @@ func runAll(opts Options) error {
 		cfg := repoConfig(repo)
 		report, err := syncConfig(cfg, opts)
 		if !opts.Check {
-			if endErr := endBackupSession(); endErr != nil && err == nil {
-				err = endErr
-			}
+			err = errors.Join(err, endBackupSession())
 		}
 		if err != nil {
+			return err
+		}
+		if err := reportError(report); err != nil {
+			printReport(report, opts)
 			return err
 		}
 		for _, r := range report.Results {

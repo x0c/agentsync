@@ -51,12 +51,10 @@ func watchLoop(ctx context.Context, opts Options) error {
 	}
 	fmt.Fprintf(os.Stderr, "agentsync watch: polling %s every %s\n", filepath.Dir(cfg.Source), watchPollInterval)
 	last := watchSnapshot{}
-	if err := watchApply(ctx, cfg, opts, last, "initial sync"); err != nil {
-		fmt.Fprintf(os.Stderr, "agentsync watch: %v\n", err)
-	} else if snap, err := watchSnapshotOf(cfg); err != nil {
+	if applied, err := watchApply(ctx, cfg, opts, last, "initial sync"); err != nil {
 		fmt.Fprintf(os.Stderr, "agentsync watch: %v\n", err)
 	} else {
-		last = snap
+		last = applied
 	}
 	ticker := time.NewTicker(watchPollInterval)
 	defer ticker.Stop()
@@ -120,32 +118,33 @@ func watchLoop(ctx context.Context, opts Options) error {
 			if watchSkipMCP(last, next) {
 				reason = "rules or skills changed"
 			}
-			if err := watchApply(ctx, cfg, opts, last, reason); err != nil {
-				fmt.Fprintf(os.Stderr, "agentsync watch: %v\n", err)
-				continue
-			}
-			snap, err := watchSnapshotOf(cfg)
+			applied, err := watchApply(ctx, cfg, opts, last, reason)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "agentsync watch: %v\n", err)
 				continue
 			}
-			last = snap
+			last = applied
 		}
 	}
 }
 
-func watchApply(ctx context.Context, cfg Config, opts Options, prev watchSnapshot, reason string) error {
+func watchApply(ctx context.Context, cfg Config, opts Options, prev watchSnapshot, reason string) (watchSnapshot, error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return watchSnapshot{}, ctx.Err()
 	}
 	next, err := watchSnapshotOf(cfg)
 	if err != nil {
-		return err
+		return watchSnapshot{}, err
 	}
 	applyOpts := opts
 	applyOpts.SkipMCP = watchSkipMCP(prev, next)
 	fmt.Fprintf(os.Stderr, "agentsync watch: %s\n", reason)
-	return runOnce(applyOpts)
+	if err := runOnce(applyOpts); err != nil {
+		return watchSnapshot{}, err
+	}
+	// Only acknowledge inputs observed before the run. Imports or concurrent
+	// edits remain changes to reconcile, never an unprocessed successful version.
+	return next, nil
 }
 
 func waitUntilStable(ctx context.Context, cfg Config, want watchSnapshot, d time.Duration) (bool, error) {

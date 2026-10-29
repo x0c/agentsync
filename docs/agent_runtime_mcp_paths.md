@@ -26,7 +26,7 @@ Implementation starts at `syncMCP()` in `internal/agentsync/mcp.go`; `defaultGlo
 }
 ```
 
-A missing canonical file is initialized from installed runtimes using case-insensitive server names; the first definition wins. Optional `sync-policy.json` filters output only. Deny wins, then a nonempty target allowlist, then the section default (`allow` when omitted). Names are case-insensitive; unknown runtime names warn. Policy does not filter import, individual MCP tools, enterprise allowlists, or runtime approval state.
+A missing canonical file is initialized from installed runtimes using case-insensitive server names; the first definition wins. Optional `sync-policy.json` filters output only. Deny wins, then a nonempty target allowlist, then the section default (`allow` when omitted). Names are case-insensitive; duplicate case-equivalent target keys are rejected, and unknown runtime names warn. Policy does not filter import, individual MCP tools, enterprise allowlists, or runtime approval state.
 
 ```json
 {
@@ -49,7 +49,9 @@ A missing canonical file is initialized from installed runtimes using case-insen
 
 Skill policy follows the same evaluation, materializing a filtered directory of per-skill links when needed; otherwise the whole skill root aliases the canonical root. See the [knowledge base](AGENTSYNC_KNOWLEDGE_BASE.md#known-filtering-limitations) for shared-root discovery limits.
 
-Mixed configuration files must preserve unrelated keys; never replace or symlink the entire file. New canonical files use `0600`, and existing target permissions are preserved. MCP data can contain plaintext secrets; exclude canonical MCP, backups, and merge drafts from Git/Syncthing. Per-runtime trust and OAuth remain user-owned. Cross-runtime timeout fields are dropped rather than implicitly converting seconds and milliseconds, except for preserving existing Pi-native options.
+Mixed configuration files must preserve unrelated keys; never replace or symlink the entire file. New canonical files use `0600`, and existing target permissions are preserved. MCP data can contain plaintext secrets; exclude canonical MCP, backups, and merge drafts from Git/Syncthing. Per-runtime trust and OAuth remain user-owned. Cross-runtime timeout fields are dropped rather than implicitly converting seconds and milliseconds. Existing Pi-native options and same-name Codex server-local options are retained rather than imported across runtimes.
+
+Codex keeps local disablement, tool allow/deny lists, approval settings, authentication helpers and unknown non-connection options when a same-name server's managed command/args/env/cwd/url/headers change. Removed servers still disappear. TOML parsing preserves unrelated statements and comments, including commented table headers and quoted server names containing literal dots. The syntax-boundary implementation reuses the pinned [go-toml iterative parser](https://pkg.go.dev/github.com/pelletier/go-toml/v2/unstable@v2.4.3); review these regression tests before updating that explicitly unstable API.
 
 Codex bundled local servers stay available to Codex but are filtered from other runtimes. There is no MCP target for iFlow or the shared `~/.agents` entry. TOML/YAML parsing libraries are the documented exceptions to the standard-library preference; JSONC handling is local.
 
@@ -154,7 +156,7 @@ Isolated tests cover selection, explicit modes, policy, preview, native-option p
 | Amp | Omit type | `command`, `args`, `env` | `url`, `headers` | Separate permission channel |
 | Gemini / Qwen | Stdio optional / HTTP-specific key | `command`, `args`, `env` | HTTP `httpUrl`, SSE `url` | Separate enablement channel |
 
-Use `http`, not `streamable-http`, in the implemented Cursor dialect. Never copy a boolean without its polarity: `enabled` and Crush's `disabled` are opposites. Timeout units differ and are not converted implicitly. Environment placeholder syntaxes differ too; unrecognized forms can become literal credentials. Crush converts `${env:X}` to `$X` and rejects `$(...)`, which could execute commands during loading.
+Use `http`, not `streamable-http`, in the implemented Cursor dialect. Never copy a boolean without its polarity: `enabled` and Crush's `disabled` are opposites. Timeout units differ and are not converted implicitly. Environment placeholder syntaxes differ too; unrecognized forms can become literal credentials. Crush converts `${env:X}` to `${X}` and rejects both `$(...)` and backquote command substitution, which could execute commands during loading. Canonical entry and field types are validated before any MCP target write; malformed entries are errors, not implicit deletions. Gemini/Qwen imports preserve `url` as SSE and `httpUrl` as streamable HTTP.
 
 ## Verification and sources
 

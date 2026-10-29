@@ -15,7 +15,7 @@ This guide covers commands, report states, service setup, validation, and releas
 | Restore the latest backup | `agentsync --rollback latest` | Yes |
 | Replace conflicting entries after backup | `agentsync --force` | Yes |
 
-`main.go` maps flags into `Options`; `Run()` selects rollback, batch, repository, global, or watch execution. Synchronization reports instruction, skill, and MCP results separately.
+`main.go` maps flags into `Options`; `Run()` selects rollback, batch, repository, global, or watch execution. Synchronization reports instruction, skill, and MCP results separately. Positional arguments are unsupported and must be rejected before any write, even when followed by `--check`. Reject conflicting or inapplicable mode flags rather than silently ignoring them.
 
 ## Global synchronization
 
@@ -50,7 +50,7 @@ Save the policy beside the canonical sources, then apply or let the watcher hand
 
 ## Check mode and report states
 
-`--check` does not create sources, backups, directories, aliases, skills, ignore files, or MCP configuration. A `would ...` detail describes a future apply, not an action already performed.
+`--check` does not create sources, backups, directories, aliases, skills, ignore files, or MCP configuration. A `would ...` detail describes a future apply, not an action already performed. Unsupported arguments and mode combinations exit 2 before synchronization; operational failures, including a reported `blocked` target, exit 1. Successful previews may still report changes that an apply would make.
 
 | State | Meaning | Next step |
 |---|---|---|
@@ -95,7 +95,7 @@ The template defaults to `%h/.local/bin/agentsync --watch`. On macOS, copy `cont
 CLAUDE.md -> AGENTS.md
 ```
 
-It uses a relative link so moving the repository does not break the entry. `--all <directory>` scans Git repositories recursively, skipping large dependency/build directories such as `node_modules`, `.venv`, `target`, and `build`. It aggregates results under `Repositories`; a repository error stops the run. Batch mode applies repository behavior, not a global sync inside every checkout.
+It uses a relative link so moving the repository does not break the entry. `--all <directory>` scans Git repositories recursively, skipping large dependency/build directories such as `node_modules`, `.venv`, `target`, and `build`. It aggregates results under `Repositories`; a repository or scan error stops the run. A missing or inaccessible scan root is an error, never a successful empty result. Batch mode applies repository behavior, not a global sync inside every checkout.
 
 ## Rollback
 
@@ -107,7 +107,7 @@ agentsync --rollback latest
 agentsync --rollback 20260916-120412
 ```
 
-Rollback backs up current entries before restoring. It does not automatically resynchronize afterward, which would immediately replace the restored state. A stamp contains only entries replaced in that session, not a full machine snapshot; `latest` selects the newest stamp. Older backups without a manifest require manual restoration.
+Rollback backs up current entries before restoring. It does not automatically resynchronize afterward, which would immediately replace the restored state. A stamp contains only entries replaced in that session, not a full machine snapshot; `latest` selects the newest valid nonempty manifest, skipping no-op sessions. Older backups without a manifest require manual restoration.
 
 Rollback cannot combine with `--watch`, `--repo`, `--all`, `--adopt`, or `--force`.
 
@@ -141,6 +141,8 @@ Build into a temporary directory and exercise the real CLI with a temporary home
 4. An absent runtime remains absent; reports and generated notices are English.
 5. Repository preview reports only the checkout's instruction entry, without global skills or MCP.
 
+Run `python3 scripts/verify_sync.py` for the repeatable real-CLI safety suite, including the 17 review regressions, watch reconciliation, and a preview/apply/recheck smoke. It builds a temporary binary and uses disposable homes only. Pass `--binary /absolute/path/to/agentsync` to test an installed or downloaded artifact; `--evidence /temporary/log-directory` retains complete CLI output. This is filesystem acceptance, not runtime sign-in, network, or prompt-loading validation.
+
 Use temporary `HOME`, `XDG_CONFIG_HOME`, and any runtime-specific root overrides; never point a write-mode smoke test at real user configuration. The synchronization knowledge base records additional MCP and skill edge cases.
 
 For installation, choose a directory on `PATH` and set `GOBIN` explicitly. Check `command -v agentsync` and the resolved binary; a Homebrew installation can precede a source installation on `PATH`. No HTTP service or database is required.
@@ -149,7 +151,7 @@ For installation, choose a directory on `PATH` and set `GOBIN` explicitly. Check
 
 Choose the next unused version, commit the validated workspace, tag that commit, and push the branch and tag. The tag workflow reuses CI for the same commit on Linux, macOS, and Windows before running GoReleaser. Archives cover macOS/Linux amd64 and arm64, and Windows amd64; Windows arm64 is excluded in `.goreleaser.yml`.
 
-The release token needs repository write permission. `HOMEBREW_TAP_GITHUB_TOKEN` needs write access to `x0c/homebrew-tap`. Confirm the published archive list, checksums, latest release, and cask version. Release notes use English first followed by a complete Simplified Chinese translation.
+The release token needs repository write permission. `HOMEBREW_TAP_GITHUB_TOKEN` needs write access to `x0c/homebrew-tap`. Confirm the published archive list, checksums, latest release, and cask version. Release notes use English first followed by a complete Simplified Chinese translation. `CHANGELOG.md` is the repository checker's designated bilingual notes source; other contributor documents remain English. New backup names cannot recover payloads already overwritten by older versions; ambiguous legacy manifests are rejected rather than restored into the wrong paths.
 
 A local release path is also available from the committed, tagged checkout:
 

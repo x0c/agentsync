@@ -1,6 +1,7 @@
 package agentsync
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,8 +20,51 @@ type SyncPolicy struct {
 
 // ResourcePolicy controls which MCP server / skill names are written to a target.
 type ResourcePolicy struct {
-	Default string                  `json:"default"` // "allow" (default) or "deny"
-	Targets map[string]TargetPolicy `json:"targets"`
+	Default string        `json:"default"` // "allow" (default) or "deny"
+	Targets policyTargets `json:"targets"`
+}
+
+// Preserve exact duplicate keys until validation instead of accepting JSON's
+// last-value-wins behavior; case variants are checked with section context below.
+type policyTargets map[string]TargetPolicy
+
+func (targets *policyTargets) UnmarshalJSON(data []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if token == nil {
+		*targets = nil
+		return nil
+	}
+	if token != json.Delim('{') {
+		return fmt.Errorf("sync policy targets must be an object")
+	}
+	decoded := make(policyTargets)
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return fmt.Errorf("sync policy target name must be a string")
+		}
+		if _, exists := decoded[name]; exists {
+			return fmt.Errorf("sync policy targets has duplicate case-insensitive target %q", name)
+		}
+		var target TargetPolicy
+		if err := decoder.Decode(&target); err != nil {
+			return err
+		}
+		decoded[name] = target
+	}
+	if _, err := decoder.Token(); err != nil {
+		return err
+	}
+	*targets = decoded
+	return nil
 }
 
 // TargetPolicy is per-runtime allow/deny. Non-empty Allow switches that target to allowlist mode.
@@ -53,21 +97,35 @@ func loadSyncPolicy(path string) (SyncPolicy, error) {
 	default:
 		return SyncPolicy{}, fmt.Errorf("sync policy piMCP must be auto, native or adapter, got %q", pol.PiMCP)
 	}
-	if err := validateResourcePolicy("mcp", pol.MCP); err != nil {
+	if err := normalizeResourcePolicy("mcp", &pol.MCP); err != nil {
 		return SyncPolicy{}, err
 	}
-	if err := validateResourcePolicy("skills", pol.Skills); err != nil {
+	if err := normalizeResourcePolicy("skills", &pol.Skills); err != nil {
 		return SyncPolicy{}, err
 	}
 	return pol, nil
 }
 
-func validateResourcePolicy(kind string, pol ResourcePolicy) error {
+func normalizeResourcePolicy(kind string, pol *ResourcePolicy) error {
 	switch strings.ToLower(strings.TrimSpace(pol.Default)) {
 	case "", "allow", "deny":
 	default:
 		return fmt.Errorf("sync policy %s.default must be allow or deny, got %q", kind, pol.Default)
 	}
+	names := make([]string, 0, len(pol.Targets))
+	for name := range pol.Targets {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	normalized := make(map[string]TargetPolicy, len(names))
+	for _, name := range names {
+		lower := strings.ToLower(name)
+		if _, exists := normalized[lower]; exists {
+			return fmt.Errorf("sync policy %s.targets has duplicate case-insensitive target %q", kind, name)
+		}
+		normalized[lower] = pol.Targets[name]
+	}
+	pol.Targets = normalized
 	return nil
 }
 

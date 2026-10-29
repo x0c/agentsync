@@ -112,7 +112,7 @@ func parseCanonical(data []byte) ([]mcpServer, error) {
 	if servers == nil {
 		return nil, fmt.Errorf("parse mcp source: mcpServers must be an object")
 	}
-	return serversFromMap(servers, "cursor"), nil
+	return validatedCanonicalServers(servers)
 }
 
 func serversFromMap(raw map[string]any, dialect string) []mcpServer {
@@ -128,6 +128,9 @@ func serversFromMap(raw map[string]any, dialect string) []mcpServer {
 	for _, name := range names {
 		entry, ok := raw[name].(map[string]any)
 		if !ok {
+			// Keep the name so an initial import fails validation rather than
+			// treating an unreadable entry as a deliberate server deletion.
+			servers = append(servers, mcpServer{Name: name})
 			continue
 		}
 		servers = append(servers, serverFromEntry(name, entry, dialect))
@@ -154,6 +157,19 @@ func serverFromEntry(name string, entry map[string]any, dialect string) mcpServe
 				for _, a := range cmd[1:] {
 					srv.Args = append(srv.Args, fmt.Sprint(a))
 				}
+			}
+		}
+	}
+	if dialect == "gemini" || dialect == "qwen" {
+		if url := stringField(entry, "httpUrl"); url != "" {
+			srv.URL = url
+			if srv.Type == "" {
+				srv.Type = "http"
+			}
+		} else if url := stringField(entry, "url"); url != "" {
+			srv.URL = url
+			if srv.Type == "" {
+				srv.Type = "sse"
 			}
 		}
 	}
@@ -279,7 +295,7 @@ func equalStringMap(a, b map[string]string) bool {
 }
 
 func containsShellSubst(s string) bool {
-	return strings.Contains(s, "$(")
+	return strings.Contains(s, "$(") || strings.ContainsRune(s, '`')
 }
 
 // isCodexBundledMCP identifies local servers bundled with Codex desktop or CLI.

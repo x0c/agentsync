@@ -1,6 +1,8 @@
 package agentsync
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -20,6 +22,16 @@ func syncSkills(cfg Config, opts Options) ([]TargetResult, []string, error) {
 		return results, backups, err
 	}
 	results = append(results, policyWarningResults(cfg.PolicyPath, policy, nil, cfg.SkillTargets)...)
+
+	// Validate every installed root before imports can mutate either overlapping tree.
+	for _, target := range cfg.SkillTargets {
+		if target.Detect != "" && !pathExists(target.Detect) {
+			continue
+		}
+		if err := validateSkillRootOverlap(cfg.SkillSource, target.Path); err != nil {
+			return results, backups, err
+		}
+	}
 
 	existing := map[string]string{}
 	for _, target := range cfg.SkillTargets {
@@ -158,16 +170,10 @@ func skillDirPath(path string, resolveSymlinks bool) string {
 	if err != nil {
 		return ""
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		target, err := os.Readlink(path)
+	if info.Mode()&os.ModeSymlink != 0 && resolveSymlinks {
+		path, err = filepath.EvalSymlinks(path)
 		if err != nil {
 			return ""
-		}
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(filepath.Dir(path), target)
-		}
-		if resolveSymlinks {
-			path = target
 		}
 	}
 	info, err = os.Stat(path)
@@ -212,17 +218,7 @@ func materializeCanonicalSkillLinks(root string, opts Options) ([]TargetResult, 
 		if err != nil {
 			return results, backups, err
 		}
-		temp := path + ".agentsync-tmp"
-		_ = os.RemoveAll(temp)
-		if err := copyDir(realPath, temp); err != nil {
-			return results, backups, err
-		}
-		if err := os.Remove(path); err != nil {
-			_ = os.RemoveAll(temp)
-			return results, backups, err
-		}
-		if err := os.Rename(temp, path); err != nil {
-			_ = os.RemoveAll(temp)
+		if err := materializeSkillLink(path, realPath); err != nil {
 			return results, backups, err
 		}
 		results = append(results, TargetResult{Path: path, Status: "materialized", Detail: "canonical skill is now a real directory"})
@@ -231,6 +227,138 @@ func materializeCanonicalSkillLinks(root string, opts Options) ([]TargetResult, 
 		}
 	}
 	return results, backups, nil
+}
+
+func materializeSkillLink(path, realPath string) (err error) {
+	info, err := os.Lstat(realPath)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("skill source is not a resolved directory: %s", realPath)
+	}
+	linkTarget, err := os.Readlink(path)
+	if err != nil {
+		return err
+	}
+	stage, err := os.MkdirTemp(filepath.Dir(path), ".agentsync-stage-*")
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, os.RemoveAll(stage)) }()
+	temp := filepath.Join(stage, "skill")
+	if err := copyDir(realPath, temp); err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+	if err := os.Rename(temp, path); err != nil {
+		return errors.Join(err, os.Symlink(linkTarget, path))
+	}
+	return nil
+}
+
+// resolvedSkillPath resolves existing ancestors too, so missing roots cannot hide overlap.
+func resolvedSkillPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	var missing []string
+	for {
+		resolved, err := filepath.EvalSymlinks(abs)
+		if err == nil {
+			for i := len(missing) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missing[i])
+			}
+			return resolved, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		// A dangling final symlink is replaceable; resolve its parent, not its target.
+		if info, statErr := os.Lstat(abs); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			parent, parentErr := filepath.EvalSymlinks(filepath.Dir(abs))
+			if parentErr != nil {
+				return "", parentErr
+			}
+			resolved = filepath.Join(parent, filepath.Base(abs))
+			for i := len(missing) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missing[i])
+			}
+			return resolved, nil
+		}
+		parent := filepath.Dir(abs)
+		if parent == abs {
+			return "", err
+		}
+		missing = append(missing, filepath.Base(abs))
+		abs = parent
+	}
+}
+
+func validateSkillRootOverlap(source, target string) error {
+	src, err := resolvedSkillPath(source)
+	if err != nil {
+		return err
+	}
+	dst, err := resolvedSkillPath(target)
+	if err != nil {
+		return err
+	}
+	if symlinkPointsTo(target, source) {
+		// Removing a correct alias is safe only if its entry is outside the source.
+		parent, err := resolvedSkillPath(filepath.Dir(target))
+		if err != nil {
+			return err
+		}
+		dst = filepath.Join(parent, filepath.Base(target))
+		overlap, err := skillPathContains(src, parent)
+		if err != nil {
+			return err
+		}
+		if overlap || samePath(src, dst) || isUnderPath(src, dst) || isUnderPath(dst, src) {
+			return fmt.Errorf("unsafe overlapping skill roots: source %s, target %s", source, target)
+		}
+		return nil
+	}
+	for _, pair := range [][2]string{{src, dst}, {dst, src}} {
+		overlap, err := skillPathContains(pair[0], pair[1])
+		if err != nil {
+			return err
+		}
+		if overlap {
+			return fmt.Errorf("unsafe overlapping skill roots: source %s, target %s", source, target)
+		}
+	}
+	return nil
+}
+
+func skillPathContains(root, path string) (bool, error) {
+	if samePath(root, path) || isUnderPath(path, root) {
+		return true, nil
+	}
+	rootInfo, err := os.Stat(root)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	// File identities also cover case-insensitive filesystems and aliased ancestors.
+	for current := path; ; current = filepath.Dir(current) {
+		info, err := os.Stat(current)
+		if err == nil && os.SameFile(rootInfo, info) {
+			return true, nil
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return false, err
+		}
+		if filepath.Dir(current) == current {
+			return false, nil
+		}
+	}
 }
 
 func sortedSkillNames(skills map[string]string) []string {
@@ -259,6 +387,9 @@ func syncSkillRoot(source string, targetSpec SkillTarget, opts Options, kept, dr
 
 func syncSkillRootAlias(source, target string, opts Options) (TargetResult, string, error) {
 	result := TargetResult{Path: target}
+	if err := validateSkillRootOverlap(source, target); err != nil {
+		return result, "", err
+	}
 	if !pathExists(target) {
 		if opts.Check {
 			result.Status = "missing"
@@ -333,6 +464,9 @@ func syncSkillRootAlias(source, target string, opts Options) (TargetResult, stri
 func syncSkillRootFiltered(source, target string, opts Options, kept, dropped []string) (TargetResult, string, error) {
 	result := TargetResult{Path: target}
 	detailBase := "filtered skill directory"
+	if err := validateSkillRootOverlap(source, target); err != nil {
+		return result, "", err
+	}
 	if matched, err := filteredSkillRootMatches(source, target, kept); err != nil {
 		return result, "", err
 	} else if matched {

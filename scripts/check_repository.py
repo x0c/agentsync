@@ -18,7 +18,7 @@ PRIVATE_IP = re.compile(
 )
 LINK = re.compile(r"!?\[[^\]\n]*\]\(([^\s)]+)(?:\s+\"[^\"]*\")?\)")
 LANGUAGE_SWITCH = "**Languages:** English | [\u7b80\u4f53\u4e2d\u6587](README.zh-CN.md)"
-TRANSLATIONS = {"README.zh-CN.md"}
+TRANSLATIONS = {"README.zh-CN.md", "CHANGELOG.md"}
 
 
 def repository_files(root: Path) -> list[Path]:

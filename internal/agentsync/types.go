@@ -1,5 +1,7 @@
 package agentsync
 
+import "fmt"
+
 type Options struct {
 	Check    bool
 	Repo     bool
@@ -9,6 +11,20 @@ type Options struct {
 	Force    bool
 	Watch    bool
 	SkipMCP  bool // Internal: watch sets this for instruction/skill-only changes to preserve runtime MCP.
+}
+
+// Validate rejects mode combinations whose flags would otherwise be ignored.
+func (opts Options) Validate() error {
+	if opts.Watch && (opts.Check || opts.Repo || opts.All != "" || opts.Adopt != "" || opts.Rollback != "" || opts.Force) {
+		return fmt.Errorf("--watch cannot be combined with --check, --repo, --all, --adopt, --rollback, or --force")
+	}
+	if opts.Rollback != "" && (opts.Repo || opts.All != "" || opts.Adopt != "" || opts.Force) {
+		return fmt.Errorf("--rollback cannot be combined with --repo, --all, --adopt, or --force")
+	}
+	if opts.All != "" && (opts.Repo || opts.Adopt != "") {
+		return fmt.Errorf("--all cannot be combined with --repo or --adopt")
+	}
+	return nil
 }
 
 type Target struct {

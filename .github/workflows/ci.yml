@@ -57,3 +57,6 @@ jobs:
 
       - name: Build
         run: go build ./...
+
+      - name: Verify isolated CLI safety paths
+        run: python scripts/verify_sync.py

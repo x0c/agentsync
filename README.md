@@ -20,7 +20,7 @@ Keep one copy across 20+ tools on your machine, including Claude Code, Codex, Cu
 brew install --cask x0c/tap/agentsync
 ```
 
-**macOS / Linux / Windows — Go 1.25+:**
+**macOS / Linux / Windows — Go 1.25.8+:**
 
 ```sh
 go install github.com/x0c/agentsync@latest
@@ -65,6 +65,7 @@ See the [workflow guide](docs/AGENTSYNC_GUIDE.md) for background services, batch
 - Support varies by tool. See [instruction and skill support](docs/agent_runtime_global_paths.md) and [MCP support](docs/agent_runtime_mcp_paths.md).
 - Instructions and skills use links where possible. Cursor gets a managed `.mdc` rule; Windows can fall back to managed copies. See [Cursor loading limits](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt).
 - Edit the shared source. The watcher applies changes outward; it does not import edits made in another tool's settings. Keep `mcp.json` local: it may contain tokens and machine-specific paths.
+- Safety checks reject unsupported arguments, invalid MCP entries, and unsafe skill-directory overlaps. Unique unmanaged rules are merged before copies are generated; same-name Codex servers keep their local restrictions and authentication options. Rollback uses collision-resistant backup payloads, and `latest` skips empty sessions. See the [preservation boundaries](docs/AGENTSYNC_KNOWLEDGE_BASE.md).
 
 Questions or a missing tool? [Open an issue](https://github.com/x0c/agentsync/issues) with the tool name, OS, and redacted output. Contributor instructions: [AGENTS.md](AGENTS.md).
 

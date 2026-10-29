@@ -1,6 +1,7 @@
 package agentsync
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -85,9 +86,13 @@ func endBackupSession() error {
 	if activeBackup == nil {
 		return nil
 	}
-	err := writeBackupManifestLocked(activeBackup)
+	session := activeBackup
 	activeBackup = nil
-	return err
+	if len(session.entries) == 0 {
+		// Remove only an empty directory we allocated, never unrecorded/manual payloads.
+		return os.Remove(session.dir)
+	}
+	return writeBackupManifestLocked(session)
 }
 
 // backupStampDir returns the directory that new backups should write into.
@@ -109,6 +114,53 @@ func backupStampDir() (string, error) {
 	return dir, err
 }
 
+// backupPayloadName preserves the first snapshot of each absolute original per session.
+func backupPayloadName(stampDir, original, kind string) (name string, existing bool, err error) {
+	abs, err := filepath.Abs(original)
+	if err != nil {
+		return "", false, err
+	}
+	name = fmt.Sprintf("entry-%x.%s", sha256.Sum256([]byte(abs)), kind)
+
+	backupSessionMu.Lock()
+	defer backupSessionMu.Unlock()
+	var entries []backupManifestEntry
+	if activeBackup != nil && samePath(activeBackup.dir, stampDir) {
+		entries = activeBackup.entries
+	} else {
+		manifest, err := loadBackupManifest(stampDir)
+		if err != nil && !os.IsNotExist(err) {
+			return "", false, err
+		}
+		entries = manifest.Entries
+	}
+	for _, entry := range entries {
+		if samePath(entry.Original, abs) {
+			if _, err := validateBackupPayload(stampDir, entry); err != nil {
+				return "", false, err
+			}
+			return entry.Name, true, nil
+		}
+		if entry.Name == name {
+			return "", false, fmt.Errorf("backup payload %q already belongs to %s", name, entry.Original)
+		}
+	}
+	return name, false, nil
+}
+
+func validateBackupEntryOwnership(entries []backupManifestEntry, entry backupManifestEntry) error {
+	for _, existing := range entries {
+		if samePath(existing.Original, entry.Original) {
+			if existing.Name != entry.Name || existing.Kind != entry.Kind {
+				return fmt.Errorf("path already backed up in this session: %s", entry.Original)
+			}
+		} else if existing.Name == entry.Name {
+			return fmt.Errorf("backup payload %q already belongs to %s", entry.Name, existing.Original)
+		}
+	}
+	return nil
+}
+
 func recordBackupEntryAt(stampDir, original, name, kind string) error {
 	abs, err := filepath.Abs(original)
 	if err != nil {
@@ -119,8 +171,16 @@ func recordBackupEntryAt(stampDir, original, name, kind string) error {
 	backupSessionMu.Lock()
 	defer backupSessionMu.Unlock()
 	if activeBackup != nil && samePath(activeBackup.dir, stampDir) {
-		activeBackup.entries = upsertBackupEntry(activeBackup.entries, entry)
-		return writeBackupManifestLocked(activeBackup)
+		if err := validateBackupEntryOwnership(activeBackup.entries, entry); err != nil {
+			return err
+		}
+		next := *activeBackup
+		next.entries = upsertBackupEntry(append([]backupManifestEntry(nil), activeBackup.entries...), entry)
+		if err := writeBackupManifestLocked(&next); err != nil {
+			return err
+		}
+		activeBackup.entries = next.entries
+		return nil
 	}
 	return mergeBackupManifestFile(stampDir, entry)
 }
@@ -148,6 +208,9 @@ func mergeBackupManifestFile(stampDir string, entry backupManifestEntry) error {
 	if manifest.Stamp == "" {
 		manifest.Stamp = filepath.Base(stampDir)
 	}
+	if err := validateBackupEntryOwnership(manifest.Entries, entry); err != nil {
+		return err
+	}
 	manifest.Entries = upsertBackupEntry(manifest.Entries, entry)
 	return writeBackupManifestFile(stampDir, manifest)
 }
@@ -161,7 +224,7 @@ func writeBackupManifestFile(stampDir string, manifest backupManifest) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(filepath.Join(stampDir, backupManifestName), data, 0o644)
+	return writeFileAtomic(filepath.Join(stampDir, backupManifestName), data, 0o644)
 }
 
 func loadBackupManifest(stampDir string) (backupManifest, error) {
@@ -180,9 +243,8 @@ func loadBackupManifest(stampDir string) (backupManifest, error) {
 }
 
 func upsertBackupEntry(entries []backupManifestEntry, entry backupManifestEntry) []backupManifestEntry {
-	for i, existing := range entries {
+	for _, existing := range entries {
 		if samePath(existing.Original, entry.Original) {
-			entries[i] = entry
 			return entries
 		}
 	}
@@ -217,10 +279,28 @@ func latestBackupStamp() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(stamps) == 0 {
-		return "", fmt.Errorf("no backup stamps found under backups/")
+	root, err := backupDir()
+	if err != nil {
+		return "", err
 	}
-	return stamps[len(stamps)-1], nil
+	for i := len(stamps) - 1; i >= 0; i-- {
+		stampDir := filepath.Join(root, stamps[i])
+		manifest, err := loadBackupManifest(stampDir)
+		if err != nil || len(manifest.Entries) == 0 || validateRestoreManifest(manifest) != nil {
+			continue
+		}
+		valid := true
+		for _, entry := range manifest.Entries {
+			if _, _, err := validateRestoreEntry(stampDir, root, entry); err != nil {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			return stamps[i], nil
+		}
+	}
+	return "", fmt.Errorf("no valid nonempty backup manifests found under backups/; older backups may require manual restoration")
 }
 
 func resolveBackupStamp(spec string) (string, error) {

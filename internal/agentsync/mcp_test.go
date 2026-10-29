@@ -310,10 +310,13 @@ url = "https://example/mcp"
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	imported := importMCPUnion([]MCPTarget{
+	imported, err := importMCPUnion([]MCPTarget{
 		{Name: "codex", Path: filepath.Join(codexDir, "config.toml"), Detect: codexDir, Dialect: "codex", Format: "toml", Mode: "key"},
 		{Name: "cursor", Path: filepath.Join(cursorDir, "mcp.json"), Detect: cursorDir, Dialect: "cursor", Format: "json", Mode: "file"},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(imported) != 1 {
 		t.Fatalf("case variants should collapse, got %+v", imported)
 	}

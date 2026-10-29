@@ -3,10 +3,7 @@ package agentsync
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"strings"
 
-	"github.com/pelletier/go-toml/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -90,47 +87,6 @@ func jsonKeyForDialect(dialect string) string {
 	default:
 		return "mcpServers"
 	}
-}
-
-func applyCodexTOML(existing []byte, payload any) ([]byte, error) {
-	rest := stripTOMLTables(existing, "mcp_servers")
-	fragment, err := toml.Marshal(map[string]any{"mcp_servers": payload})
-	if err != nil {
-		return nil, fmt.Errorf("encode codex mcp_servers: %w", err)
-	}
-	rest = bytes.TrimSpace(rest)
-	var b bytes.Buffer
-	if len(rest) > 0 {
-		b.Write(rest)
-		if rest[len(rest)-1] != '\n' {
-			b.WriteByte('\n')
-		}
-		b.WriteByte('\n')
-	}
-	b.Write(fragment)
-	if b.Len() > 0 && b.Bytes()[b.Len()-1] != '\n' {
-		b.WriteByte('\n')
-	}
-	return b.Bytes(), nil
-}
-
-func stripTOMLTables(data []byte, prefix string) []byte {
-	lines := strings.Split(string(data), "\n")
-	out := make([]string, 0, len(lines))
-	skipping := false
-	for _, line := range lines {
-		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
-			name := strings.TrimSpace(trim[1 : len(trim)-1])
-			name = strings.Trim(name, "[]")
-			skipping = name == prefix || strings.HasPrefix(name, prefix+".")
-		}
-		if skipping {
-			continue
-		}
-		out = append(out, line)
-	}
-	return []byte(strings.Join(out, "\n"))
 }
 
 func applyGooseYAML(existing []byte, payload any) ([]byte, error) {

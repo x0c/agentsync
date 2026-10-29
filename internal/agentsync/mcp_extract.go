@@ -104,34 +104,7 @@ func extractCodexTOML(data []byte) ([]mcpServer, error) {
 		return nil, fmt.Errorf("parse codex toml: %w", err)
 	}
 	raw, _ := root["mcp_servers"].(map[string]any)
-	return serversFromMap(collapseDottedTOMLTables(raw), "codex"), nil
-}
-
-// collapseDottedTOMLTables folds dotted child tables into their parent server.
-// Some TOML decoders leave dotted paths as sibling keys, not separate MCP servers.
-func collapseDottedTOMLTables(raw map[string]any) map[string]any {
-	if raw == nil {
-		return raw
-	}
-	out := make(map[string]any, len(raw))
-	dotted := make([]string, 0)
-	for name, v := range raw {
-		if strings.Contains(name, ".") {
-			dotted = append(dotted, name)
-			continue
-		}
-		out[name] = v
-	}
-	for _, name := range dotted {
-		parent, rest, _ := strings.Cut(name, ".")
-		parentEntry, ok := out[parent].(map[string]any)
-		if !ok {
-			parentEntry = map[string]any{}
-			out[parent] = parentEntry
-		}
-		parentEntry[rest] = raw[name]
-	}
-	return out
+	return serversFromMap(raw, "codex"), nil
 }
 
 func extractGooseYAML(data []byte) ([]mcpServer, error) {

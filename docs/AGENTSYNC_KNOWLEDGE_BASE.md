@@ -39,7 +39,7 @@ When the canonical source is missing, readable runtime entries can initialize it
 
 Preserve unique user-written content before replacement by importing it; back up replaced entries. Reviewed replacement content can be prepared manually and adopted with `--adopt`; the current synchronization path does not generate merge drafts automatically. Ordinary differing files merge by default. `--force` permits direct replacement after backup and must not become the default.
 
-Files marked `<!-- managed-by: agentsync` are generated copies, including Cursor `.mdc` rules. If stale, replace them from the canonical source; never import their old body back into it. `sameContent()` strips managed markers and Cursor frontmatter. An equivalent ordinary file reports `ok` unless forced.
+Files marked `<!-- managed-by: agentsync` are generated copies, including Cursor `.mdc` rules. If stale, replace them from the canonical source; never import their old body back into it. Destination format alone does not establish ownership: preserve unique unmarked Cursor files and linked user content before replacing them. Finish instruction imports before generating any runtime copies, so later targets cannot leave earlier copies stale. `sameContent()` strips managed markers and Cursor frontmatter. An equivalent ordinary file reports `ok` unless forced.
 
 Alias fallback order is symlink, Windows hardlink, then managed copy. Global links use absolute resolved paths. Repository mode uses a relative `CLAUDE.md -> AGENTS.md` link so moving a checkout remains safe. Cursor is an explicit exception to bare aliases: its managed `.mdc` requires `alwaysApply` frontmatter.
 
@@ -52,6 +52,8 @@ Repository and batch modes manage only repository instruction entries. They must
 Without effective policy filtering, a runtime skill root aliases the entire canonical root. This makes additions, deletions, and renames visible immediately. With filtering, it becomes a real directory containing symlinks only for allowed skills, plus preserved hidden directories. Removing filtering restores the whole-root alias after backup. Always creating individual skill links would reintroduce stale deletions and renames.
 
 Hidden directories are excluded from ordinary skill discovery but retained by `preserveHiddenSkillEntries()`. They also participate in watch fingerprints. Never treat all dot-directories as disposable.
+
+Skill materialization must use a uniquely created staging directory and clean up only its own staging content; a pre-existing `<skill>.agentsync-tmp` directory is user content, not disposable storage. Resolve the complete root symlink chain before copying a skill. Before replacing a runtime root, compare resolved source/target identities and ancestry: never delete the canonical source's backing directory or create an alias cycle. Unsafe overlaps must fail without removing either tree.
 
 ### Known filtering limitations
 
@@ -66,13 +68,13 @@ Global synchronization injects the English canonical-source notice into `AGENTS.
 
 For each installed target, apply name-based policy, exclude runtime-specific bundled servers where necessary, translate its dialect, and compare the resulting server set semantically. An equivalent set reports `ok` without rewriting a hot configuration file. Filtered names can appear in the detail.
 
-Dedicated MCP files can be replaced. Mixed files must preserve unrelated authentication, trust, settings, and state by changing only the MCP key. Use atomic writes in the same directory and account for concurrent runtime writes. Never apply whole-file instruction symlinks to mixed MCP configuration.
+Dedicated MCP files can be replaced. Mixed files must preserve unrelated authentication, trust, settings, and state by changing only the MCP key. Codex TOML handling must understand commented table headers and literal dots in quoted server names. Preserve same-name Codex server-local disablement, tool restrictions, approval and authentication settings when managed connection fields change; removed canonical servers still disappear. Do not propagate runtime-local permissions into other runtimes. Use atomic writes in the same directory and account for concurrent runtime writes. Never apply whole-file instruction symlinks to mixed MCP configuration.
 
 New canonical MCP files use `0600`. Preserve existing target permissions. Configuration may contain plaintext tokens and private URLs: keep canonical MCP, backups, and merge drafts out of Git and Syncthing. When the canonical root has `.git` or `.stfolder`, `ensureSecretIgnores()` adds `mcp.json`, `backups/`, and `merge-drafts/` to the corresponding ignore file. Policy contains no tokens and can be synchronized separately.
 
-Empty files, malformed JSON, or a missing `mcpServers` object fail without overwriting targets. Watch also rejects an empty map if installed runtimes still have servers; intentional clearing requires a one-shot apply.
+Empty files, malformed JSON, a missing `mcpServers` object, or any invalid canonical server entry fail without overwriting MCP targets. Reject partially valid sets rather than silently turning invalid entries into server deletions. Watch also rejects an empty map if installed runtimes still have servers; intentional clearing requires a one-shot apply. Infer imported transport using the source dialect: Gemini/Qwen `url` is SSE and `httpUrl` is streamable HTTP.
 
-Codex bundled local servers identified by `SkyComputerUseClient`, `node_repl`, or `NODE_REPL_*` remain in the canonical source for Codex round trips, but are not copied to other runtimes. Crush command substitution must be rejected, not passed through. iFlow and the shared `~/.agents` entry have no MCP output.
+Codex bundled local servers identified by `SkyComputerUseClient`, `node_repl`, or `NODE_REPL_*` remain in the canonical source for Codex round trips, but are not copied to other runtimes. Crush command substitution, including both `$()` and backquote forms, must be rejected, not passed through. iFlow and the shared `~/.agents` entry have no MCP output.
 
 The [MCP path/format guide](agent_runtime_mcp_paths.md) owns dialect rules and runtime-specific detection. Pi retains policy key `pi`; `piMCP` selects `auto`, `native`, or `adapter`. Native writes preserve top-level settings and per-server `exposure`, `toolExposure`, `oauth`, `timeout`, and `enabled`; removed servers still disappear. Adapter-owned files are not renamed or rewritten as native configuration.
 
@@ -80,7 +82,7 @@ The [MCP path/format guide](agent_runtime_mcp_paths.md) owns dialect rules and r
 
 `sync-policy.json` is separate from MCP secrets. Match runtime and server/skill names case-insensitively. Deny wins; a nonempty target allowlist applies next; otherwise use the section default (`allow` when omitted). Unknown runtime names warn rather than fail. Denied servers disappear from the written set rather than being emitted as disabled entries.
 
-A missing policy preserves the unfiltered behavior. The canonical source always remains complete. Changes to policy semantics require aligned documentation and tests.
+A missing policy preserves the unfiltered behavior. Reject target keys that collide after case folding, in both MCP and skill policy, so an exact-match object cannot hide a case-equivalent deny rule. The canonical source always remains complete. Changes to policy semantics require aligned documentation and tests.
 
 ## Watch
 
@@ -88,15 +90,15 @@ The watcher tracks canonical sources, policy, runtime presence, and Pi selection
 
 Instruction/skill-only changes with an unchanged policy set internal `Options.SkipMCP`. Policy changes must update both skills and MCP. `SkipMCP` is not a public CLI flag.
 
-Only a successful `runOnce()` advances the successful fingerprint. Failed writes and invalid source content must be retried. Ignore Syncthing conflict files, `.DS_Store`, and `.stversions`, but include `.system`; exclude directory mtimes so ignored files cannot trigger updates. Watch remains opt-in, incompatible with forced replacement, and configured through the service templates rather than a service-install subcommand.
+Only a successful `runOnce()` advances the successful fingerprint. Never mark an input version as applied when derived outputs were generated from an earlier version; source imports and concurrent source changes must not be swallowed by a post-run snapshot. Failed writes, blocked targets, and invalid source content must be retried; a printed `blocked` result is an operational failure, not successful synchronization. Ignore Syncthing conflict files, `.DS_Store`, and `.stversions`, but include `.system`; exclude directory mtimes so ignored files cannot trigger updates. Watch remains opt-in, incompatible with forced replacement, and configured through the service templates rather than a service-install subcommand.
 
 ## Backups and rollback
 
 File copies and instruction imports must close each opened file exactly once and propagate close failures along with any earlier write/copy error. Otherwise a failed final write can be reported as successful preservation. Watch fingerprint writes must also propagate errors instead of silently advancing. The Go contracts for [File.Close](https://pkg.go.dev/os#File.Close) and [errors.Join](https://pkg.go.dev/errors#Join) support single-close handling while retaining multiple errors.
 
-A real synchronization uses `beginBackupSession()` / `endBackupSession()`. Replaced paths share one unique timestamp directory containing payloads and `manifest.json`, with original absolute paths and file/symlink/directory types. Same-second sessions receive suffixes such as `-01`; reusing a stamp could overwrite the payload currently being restored.
+A real synchronization uses `beginBackupSession()` / `endBackupSession()`. Replaced paths share one unique timestamp directory containing payloads and `manifest.json`, with original absolute paths and file/symlink/directory types. Payload names must be collision-resistant for distinct original paths, including paths differing only by separators versus literal underscores. Preserve compatibility with existing manifest payload names. Same-second sessions receive suffixes such as `-01`; reusing a stamp could overwrite the payload currently being restored. Empty successful sessions must not hide the latest recoverable nonempty backup.
 
-Rollback supports read-only preview, backs up current entries before restoring, and does not call synchronization afterward. Old stamps without a manifest require manual restoration. Backups cover replaced entries in that session, not the entire machine.
+Rollback supports read-only preview, backs up current entries according to their current filesystem type before restoring the saved type, and does not call synchronization afterward. A skill symlink materialized into a directory must remain reversible; preview must not approve an inherently impossible restore path. `latest` selects the newest valid nonempty manifest, skipping no-op sessions. Old stamps without a manifest require manual restoration. Reject manifests that share a payload across different originals: already-overwritten legacy payloads cannot be reconstructed by a new release. Backups cover replaced entries in that session, not the entire machine.
 
 ## Implementation anchors
 
@@ -108,8 +110,8 @@ Rollback supports read-only preview, backs up current entries before restoring, 
 | `files.go` | Aliases, managed copies, payload comparison, file/directory preservation |
 | `merge.go` | Source initialization, unique-content imports, reviewed-file adoption |
 | `skills.go`, `policy.go` | Skill discovery/import, hidden content, filtered views, policy evaluation |
-| `mcp.go`, `mcp_extract.go`, `mcp_server.go`, `mcp_json.go` | Source import, semantic comparison, MCP normalization, secret ignores |
-| `mcp_render.go`, `mcp_apply.go` | Dialect rendering and configuration-key updates |
+| `mcp.go`, `mcp_extract.go`, `mcp_server.go`, `mcp_validate.go`, `mcp_json.go` | Source import, strict canonical validation, semantic comparison, MCP normalization, secret ignores |
+| `mcp_render.go`, `mcp_apply.go`, `mcp_toml.go` | Dialect rendering, syntax-aware Codex TOML updates, and runtime-local option preservation |
 | `mcp_dsh.go`, `pi_mcp.go` | dsh managed patches and Pi output selection |
 | `watch.go` | Polling, fingerprints, debounce, retries |
 | `backup_session.go`, `restore.go` | Session manifests and rollback |
@@ -117,6 +119,8 @@ Rollback supports read-only preview, backs up current entries before restoring, 
 Paths other than `main.go` are under `internal/agentsync/`. Matching `_test.go` files exercise preservation, isolation, rollback, policy, idempotency, and dialect edge cases. Use the code graph for call relationships rather than duplicating a complete symbol inventory here.
 
 ## Verification boundaries
+
+Release builds use the patched Go 1.26.10 toolchain recommended by `go.mod`; the minimum supported Go 1.25 patch is 1.25.8. The October 2026 review's `govulncheck` run on Go 1.25.6 reported [GO-2026-4602](https://pkg.go.dev/vuln/GO-2026-4602) through `os.ReadDir`. The documented exploit requires `os.Root` (not used here), so the trace alone does not establish an exploitable AgentSync path; nevertheless build and scan the shipped binary with the fixed toolchain rather than suppressing the diagnostic. See [Go patch release notes](https://go.dev/doc/devel/release).
 
 The [workflow guide](AGENTSYNC_GUIDE.md#development-validation) owns local commands and real-path smoke expectations. MCP tests additionally cover absent runtimes, malformed/empty sources preserving outputs, policy filtering, mixed-file state preservation, and watch's empty-map protection. Skill tests must cover hidden content and transitions between filtered and whole-root views.
 

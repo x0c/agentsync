@@ -175,35 +175,40 @@ func backupFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := sanitizePath(path)
-	dst := filepath.Join(stampDir, name)
-	if err := ensureParent(dst); err != nil {
+	kind := "file"
+	if info.Mode()&os.ModeSymlink != 0 {
+		kind = "symlink"
+	}
+	name, existing, err := backupPayloadName(stampDir, path, kind)
+	if err != nil {
 		return "", err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	dst := filepath.Join(stampDir, name)
+	if existing {
+		return dst, nil
+	}
+	if kind == "symlink" {
 		target, err := os.Readlink(path)
 		if err != nil {
 			return "", err
 		}
-		storedName := name + ".symlink"
-		storedPath := filepath.Join(stampDir, storedName)
-		if err := os.WriteFile(storedPath, []byte(target+"\n"), 0o644); err != nil {
+		if err := writeNewBackupFile(dst, []byte(target+"\n"), 0o644); err != nil {
 			return "", err
 		}
-		if err := recordBackupEntryAt(stampDir, path, storedName, "symlink"); err != nil {
-			return "", err
+		if err := recordBackupEntryAt(stampDir, path, name, kind); err != nil {
+			return "", errors.Join(err, os.Remove(dst))
 		}
-		return storedPath, nil
+		return dst, nil
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(dst, data, info.Mode().Perm()); err != nil {
+	if err := writeNewBackupFile(dst, data, info.Mode().Perm()); err != nil {
 		return "", err
 	}
-	if err := recordBackupEntryAt(stampDir, path, name, "file"); err != nil {
-		return "", err
+	if err := recordBackupEntryAt(stampDir, path, name, kind); err != nil {
+		return "", errors.Join(err, os.Remove(dst))
 	}
 	return dst, nil
 }
@@ -223,15 +228,38 @@ func backupAny(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := sanitizePath(path)
-	dst := filepath.Join(stampDir, name)
-	if err := copyDir(path, dst); err != nil {
+	name, existing, err := backupPayloadName(stampDir, path, "dir")
+	if err != nil {
 		return "", err
+	}
+	dst := filepath.Join(stampDir, name)
+	if existing {
+		return dst, nil
+	}
+	// Reserve a new directory; never merge into another entry's payload.
+	if err := os.Mkdir(dst, info.Mode().Perm()); err != nil {
+		return "", err
+	}
+	if err := copyDir(path, dst); err != nil {
+		return "", errors.Join(err, os.RemoveAll(dst))
 	}
 	if err := recordBackupEntryAt(stampDir, path, name, "dir"); err != nil {
-		return "", err
+		return "", errors.Join(err, os.RemoveAll(dst))
 	}
 	return dst, nil
+}
+
+func writeNewBackupFile(path string, data []byte, perm os.FileMode) (err error) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return err
+	}
+	_, writeErr := file.Write(data)
+	err = errors.Join(writeErr, file.Close())
+	if err != nil {
+		err = errors.Join(err, os.Remove(path))
+	}
+	return err
 }
 
 func copyDir(src, dst string) error {

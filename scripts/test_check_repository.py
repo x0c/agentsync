@@ -24,6 +24,13 @@ class RepositoryCheckTests(unittest.TestCase):
         self.assertEqual(self.check("README.zh-CN.md", chinese), [])
         self.assertIn("use English", self.check("main.go", chinese)[0])
 
+    def test_bilingual_changelog_does_not_exempt_other_markdown(self):
+        chinese = "\u4e2d\u6587"
+        self.assertEqual(self.check("CHANGELOG.md", "## English\nFixes\n## " + chinese), [])
+        self.assertIn("use English", self.check("docs/guide.md", chinese)[0])
+        private_path = "/" + "Users" + "/example/project/"
+        self.assertIn("absolute home", self.check("CHANGELOG.md", private_path)[0])
+
     def test_language_switch_is_allowed_only_on_first_line(self):
         self.check("README.zh-CN.md", "Translation")
         self.assertEqual(self.check("README.md", LANGUAGE_SWITCH + "\n# agentsync\n"), [])

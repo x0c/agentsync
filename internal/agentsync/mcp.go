@@ -85,7 +85,17 @@ func ensureMCPSource(cfg Config, opts Options) ([]mcpServer, *TargetResult, erro
 		return servers, nil, nil
 	}
 
-	imported := importMCPUnion(cfg.MCPTargets)
+	imported, err := importMCPUnion(cfg.MCPTargets)
+	if err != nil {
+		return nil, nil, err
+	}
+	data, err := marshalCanonical(imported)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := parseCanonical(data); err != nil {
+		return nil, nil, fmt.Errorf("validate imported mcp source: %w", err)
+	}
 	result := TargetResult{Path: cfg.MCPSource, Status: "created", Detail: "canonical mcp source"}
 	if opts.Check {
 		result.Status = "missing"
@@ -96,10 +106,6 @@ func ensureMCPSource(cfg Config, opts Options) ([]mcpServer, *TargetResult, erro
 		}
 		return imported, &result, nil
 	}
-	data, err := marshalCanonical(imported)
-	if err != nil {
-		return nil, nil, err
-	}
 	if err := writeFileAtomic(cfg.MCPSource, appendNewline(data), 0o600); err != nil {
 		return nil, nil, err
 	}
@@ -109,7 +115,7 @@ func ensureMCPSource(cfg Config, opts Options) ([]mcpServer, *TargetResult, erro
 	return imported, &result, nil
 }
 
-func importMCPUnion(targets []MCPTarget) []mcpServer {
+func importMCPUnion(targets []MCPTarget) ([]mcpServer, error) {
 	seen := map[string]mcpServer{}
 	seenLower := map[string]string{}
 	names := make([]string, 0)
@@ -120,11 +126,11 @@ func importMCPUnion(targets []MCPTarget) []mcpServer {
 		}
 		servers, err := loadTargetServers(target)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("import mcp config %s: %w", target.Path, err)
 		}
 		for _, srv := range servers {
-			if srv.Name == "" {
-				continue
+			if err := validateMCPConnection(srv); err != nil {
+				return nil, fmt.Errorf("import mcp config %s server %q: %w", target.Path, srv.Name, err)
 			}
 			if _, ok := seen[srv.Name]; ok {
 				continue
@@ -142,7 +148,7 @@ func importMCPUnion(targets []MCPTarget) []mcpServer {
 	for _, name := range names {
 		out = append(out, seen[name])
 	}
-	return out
+	return out, nil
 }
 
 func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropped []string) (TargetResult, string, error) {
@@ -291,11 +297,7 @@ func loadTargetServers(target MCPTarget) ([]mcpServer, error) {
 			return []mcpServer{}, nil
 		}
 		// Read only the managed block; custom tags in manual entries do not affect import.
-		servers, err := extractDshServers(data)
-		if err != nil {
-			return []mcpServer{}, nil
-		}
-		return servers, nil
+		return extractDshServers(data)
 	}
 	data, _, err := readExistingMCP(target.Path)
 	if err != nil {
