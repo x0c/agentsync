@@ -8,6 +8,16 @@ the named acceptance is done.
 
 ## Unreleased
 
+## 0.16.5
+
+### English
+
+- Migrate the Homebrew Cask post-install hook to GoReleaser's declarative `install_steps` DSL, following the `homebrew_casks.hooks.post.install` deprecation. The quarantine-bit removal behavior on macOS is unchanged.
+
+### 简体中文
+
+- 将 Homebrew Cask 安装后钩子迁移至 GoReleaser 声明式 `install_steps` 写法，跟进 `homebrew_casks.hooks.post.install` 弃用说明；macOS 去隔离位行为不变。
+
 ## 0.16.4
 
 ### English
