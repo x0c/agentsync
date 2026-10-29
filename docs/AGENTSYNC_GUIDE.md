@@ -151,7 +151,7 @@ For installation, choose a directory on `PATH` and set `GOBIN` explicitly. Check
 
 Choose the next unused version, commit the validated workspace, tag that commit, and push the branch and tag. The tag workflow reuses CI for the same commit on Linux, macOS, and Windows before running GoReleaser. Archives cover macOS/Linux amd64 and arm64, and Windows amd64; Windows arm64 is excluded in `.goreleaser.yml`.
 
-The release token needs repository write permission. `HOMEBREW_TAP_GITHUB_TOKEN` needs write access to `x0c/homebrew-tap`. Confirm the published archive list, checksums, latest release, and cask version. Release notes use English first followed by a complete Simplified Chinese translation. `CHANGELOG.md` is the repository checker's designated bilingual notes source; other contributor documents remain English. New backup names cannot recover payloads already overwritten by older versions; ambiguous legacy manifests are rejected rather than restored into the wrong paths.
+The release token needs repository write permission. `HOMEBREW_TAP_GITHUB_TOKEN` needs write access to `x0c/homebrew-tap`. Confirm the published archive list, checksums, latest release, and cask version. Release notes use English first followed by a complete Simplified Chinese translation. `CHANGELOG.md` is the repository checker's designated bilingual notes source; other contributor documents remain English. The tagged release workflow extracts that exact version's section and refuses missing or incomplete bilingual notes before publishing. New backup names cannot recover payloads already overwritten by older versions; ambiguous legacy manifests are rejected rather than restored into the wrong paths.
 
 A local release path is also available from the committed, tagged checkout:
 
