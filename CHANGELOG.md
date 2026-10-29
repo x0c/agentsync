@@ -8,6 +8,16 @@ the named acceptance is done.
 
 ## Unreleased
 
+## 1.0.0
+
+### English
+
+- First stable release, with no functional changes since 0.16.5. The 0.16.x series resolved all 17 confirmed review defects and migrated the Homebrew Cask hook to the supported declarative format.
+
+### 简体中文
+
+- 首个稳定版本，自 0.16.5 起无功能变化。0.16.x 系列已修复审查确认的全部 17 项缺陷，并将 Homebrew Cask 钩子迁移至受支持的声明式写法。
+
 ## 0.16.5
 
 ### English
