@@ -26,9 +26,9 @@ brew install --cask x0c/tap/agentsync
 go install github.com/x0c/agentsync@latest
 ```
 
-如有需要，将 Go 的可执行文件目录加入 PATH（通常为 `~/go/bin`；Windows 为 `%USERPROFILE%\go\bin`）。
+如有需要，将 Go 的 bin 目录加入 PATH（通常为 `~/go/bin`；Windows 为 `%USERPROFILE%\go\bin`）。
 
-**没有 Go：** 下载并解压 [Release 中的可执行文件](https://github.com/x0c/agentsync/releases/latest)，放到 PATH 中即可。支持 macOS 和 Linux（arm64 / amd64），以及 Windows（amd64），附带校验文件。
+**没有 Go：** 下载并解压 [Release 中的可执行文件](https://github.com/x0c/agentsync/releases/latest)，放到 PATH 中即可。支持 macOS 和 Linux（arm64 / amd64），以及 Windows（amd64），附带校验和文件。
 
 ## 使用
 
@@ -36,7 +36,7 @@ go install github.com/x0c/agentsync@latest
 agentsync
 ```
 
-就这一条。它会合并已有规则、收集完整的 Skill 文件夹，并导入 MCP 服务器配置，统一到一个公共目录，再为已安装的工具建立链接或写入对应格式的配置。替换前自动备份，未安装的工具自动跳过。
+就这一条。它会合并已有规则、收集完整的 Skill 文件夹，并导入 MCP 服务器配置，统一到一个共享目录，再为已安装的工具建立链接或写入对应格式的配置。替换前自动备份，未安装的工具自动跳过。
 
 此后，只需维护 `~/.config/agentsync/` 中的这三项：
 
@@ -53,7 +53,7 @@ agentsync
 | 需求 | 命令 |
 |---|---|
 | 只预览，不修改文件 | `agentsync --check` |
-| 自动同步公共目录中的改动 | `agentsync --watch` |
+| 自动同步共享目录中的改动 | `agentsync --watch` |
 | 还原最近一次备份 | `agentsync --rollback latest` |
 | 将项目的 `CLAUDE.md` 链接到 `AGENTS.md` | `agentsync --repo` |
 
@@ -61,11 +61,11 @@ agentsync
 
 ## 几点说明
 
-- 默认管理**本机的全局配置**；项目文件使用单独的仓库模式。
+- 默认管理**本机的全局配置**；项目文件走独立的仓库模式。
 - 各工具支持的能力不同，详见 [规则与 Skill 支持](docs/agent_runtime_global_paths.md) 和 [MCP 支持](docs/agent_runtime_mcp_paths.md)。
 - 规则与 Skill 尽量使用链接；Cursor 会生成由 `agentsync` 托管的 `.mdc` 规则文件，Windows 下可回退为文件拷贝同步。另见 [Cursor 规则加载限制](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt)。
-- 请修改公共目录中的源文件。自动同步只向各工具写入，不会导入工具设置界面的改动。`mcp.json` 可能含令牌与本机路径，请保留在本机。
-- 安全检查会拒绝不支持的参数、无效 MCP 条目和不安全的 Skill 目录重叠。生成副本前先合并用户自写的独有规则；同名 Codex 服务器保留本地限制与认证选项。回滚机制采用防冲突的独立备份快照，且 `--rollback latest` 会自动跳过无文件变更的空记录。详见 [内容保留边界](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
+- 请修改共享目录中的源文件。自动同步只向各工具写入，不会导入工具设置界面的改动。`mcp.json` 可能含令牌与本机路径，请保留在本机。
+- 安全检查会拒绝不支持的参数、无效 MCP 条目和不安全的 Skill 目录重叠。生成副本前先合入用户自写的个性化规则；同名的 Codex 服务器保留各自的本地限制与认证配置。回滚机制采用防冲突的独立备份快照，且 `--rollback latest` 会自动跳过无文件变更的空记录。详见 [内容保留边界](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
 
 遇到问题或希望支持新工具？[提交 Issue](https://github.com/x0c/agentsync/issues)，附上工具名称、系统和脱敏输出。贡献规范见 [AGENTS.md](AGENTS.md)。
 
