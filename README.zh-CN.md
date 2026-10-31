@@ -63,9 +63,9 @@ agentsync
 
 - 默认管理**本机的全局配置**；项目文件使用单独的仓库模式。
 - 各工具支持的能力不同，详见 [规则与 Skill 支持](docs/agent_runtime_global_paths.md) 和 [MCP 支持](docs/agent_runtime_mcp_paths.md)。
-- 规则与 Skill 尽量使用链接；Cursor 使用受管的 `.mdc` 规则，Windows 可退回托管副本。另见 [Cursor 规则加载限制](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt)。
+- 规则与 Skill 尽量使用链接；Cursor 会生成由 `agentsync` 托管的 `.mdc` 规则文件，Windows 下可回退为文件拷贝同步。另见 [Cursor 规则加载限制](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt)。
 - 请修改公共目录中的源文件。自动同步只向各工具写入，不会导入工具设置界面的改动。`mcp.json` 可能含令牌与本机路径，请保留在本机。
-- 安全检查会拒绝不支持的参数、无效 MCP 条目和不安全的 Skill 目录重叠。生成副本前先合并用户自写的独有规则；同名 Codex 服务器保留本地限制与认证选项。回滚使用防重名的备份载荷，`latest` 会跳过空备份会话。详见 [内容保留边界](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
+- 安全检查会拒绝不支持的参数、无效 MCP 条目和不安全的 Skill 目录重叠。生成副本前先合并用户自写的独有规则；同名 Codex 服务器保留本地限制与认证选项。回滚机制采用防冲突的独立备份快照，且 `--rollback latest` 会自动跳过无文件变更的空记录。详见 [内容保留边界](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
 
 遇到问题或希望支持新工具？[提交 Issue](https://github.com/x0c/agentsync/issues)，附上工具名称、系统和脱敏输出。贡献规范见 [AGENTS.md](AGENTS.md)。
 

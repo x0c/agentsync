@@ -36,7 +36,7 @@ Add Go's bin directory to PATH if needed (usually `~/go/bin`; `%USERPROFILE%\go\
 agentsync
 ```
 
-That's it. Existing instructions are merged, complete skill folders are collected, and MCP servers are imported into one shared source. Installed tools receive links or configuration in their own format. Files replaced during sync are backed up automatically; tools you haven't installed are skipped.
+That's it. `agentsync` merges your existing instructions, collects your skill folders, and imports your MCP servers into one shared source—then links or writes them back to each installed tool in its native format. Files replaced during sync are backed up automatically; tools you haven't installed are skipped.
 
 From then on, maintain these files in `~/.config/agentsync/`:
 
