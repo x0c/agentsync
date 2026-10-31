@@ -69,6 +69,17 @@ See the [workflow guide](docs/AGENTSYNC_GUIDE.md) for background services, batch
 
 Questions or a missing tool? [Open an issue](https://github.com/x0c/agentsync/issues) with the tool name, OS, and redacted output. Contributor instructions: [AGENTS.md](AGENTS.md).
 
+## 🧩 Related Tools in the AI Coding Suite
+
+If you run multiple AI coding agents daily, check out the rest of the local-first toolkit:
+
+| Repository | Description |
+| :--- | :--- |
+| **[corral](https://github.com/corral-dev/corral)** | Run Claude Code, Codex, OpenCode, Cursor & Pi side-by-side in a terminal session manager, then continue from iPhone or Mac. |
+| **[subswap](https://github.com/x0c/subswap)** | Check remaining quota and switch Claude Code, Codex, Cursor, Kimi Code & OpenCode accounts without logging out. |
+| **[agent-doc-skills](https://github.com/x0c/agent-doc-skills)** | Navigable project knowledge base skills (`doc-init`, `doc-update`, `doc-compact`) so coding agents don't rediscover your repo every session. |
+| **[sesskit](https://github.com/x0c/sesskit)** | Parse and export local Claude Code, Codex CLI, and Cursor session transcript files from disk. |
+
 ## License
 
 [MIT](LICENSE)
