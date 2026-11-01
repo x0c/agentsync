@@ -63,11 +63,15 @@ jobs:
     name: Install (Homebrew cask, Linux)
     runs-on: ubuntu-latest
     steps:
-      - name: Install from the tap when Homebrew is available
+      - name: Install from the tap with Homebrew
         run: |
-          if ! command -v brew >/dev/null 2>&1; then
-            echo "Homebrew is not available on this runner; skipping."
-            exit 0
+          if ! command -v brew >/dev/null 2>&1 && [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           fi
+          if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew is not available on this runner."
+            exit 1
+          fi
+          brew --version
           brew install --cask x0c/tap/agentsync
           agentsync --version
