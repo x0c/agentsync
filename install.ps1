@@ -74,8 +74,14 @@ try {
     if (-not $Version -and $env:AGENTSYNC_VERSION) {
         $Version = $env:AGENTSYNC_VERSION
     }
+    if ($Version) {
+        $Version = $Version.Trim()
+        if ($Version.ToUpperInvariant() -eq 'LATEST') {
+            $Version = ''
+        }
+    }
     if ($Version -and $Version -notmatch '^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$') {
-        throw "Invalid version '$Version'. Expected a value such as 1.4.0 or v1.4.0."
+        throw "Invalid version '$Version'. Expected a value such as 1.4.0 or v1.4.0, or 'latest'."
     }
 
     $repository = if ($env:AGENTSYNC_REPOSITORY) { $env:AGENTSYNC_REPOSITORY } else { "x0c/agentsync" }
