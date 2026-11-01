@@ -156,7 +156,7 @@ irm https://raw.githubusercontent.com/x0c/agentsync/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/x0c/agentsync/main/install.sh | sh
 ```
 
-`install.ps1` targets Windows on amd64 and arm64 (archive `agentsync_windows_<arch>.zip`) and defaults to `%LOCALAPPDATA%\Programs\agentsync\bin`, adding it to the user PATH. `install.sh` targets macOS and Linux on amd64 and arm64 (archive `agentsync_<os>_<arch>.tar.gz`) and defaults to `~/.local/bin`, printing a PATH hint when that directory is not on PATH. Both accept `AGENTSYNC_INSTALL_DIR` to override the destination and `AGENTSYNC_VERSION` to pin a release; neither uses elevated privileges. macOS users can alternatively run `brew install --cask x0c/tap/agentsync`, and any OS with Go 1.25.8+ can run `go install github.com/x0c/agentsync@latest`. Verify with `agentsync --version`.
+`install.ps1` targets Windows on amd64 and arm64 (archive `agentsync_windows_<arch>.zip`) and defaults to `%LOCALAPPDATA%\Programs\agentsync\bin`, adding it to the user PATH. `install.sh` targets macOS and Linux on amd64 and arm64 (archive `agentsync_<os>_<arch>.tar.gz`) and defaults to `~/.local/bin`, printing a PATH hint when that directory is not on PATH. Both accept `AGENTSYNC_INSTALL_DIR` to override the destination and `AGENTSYNC_VERSION` to pin a release; neither uses elevated privileges. macOS and Linux users can alternatively run `brew install --cask x0c/tap/agentsync`, and any OS with Go 1.25.8+ can run `go install github.com/x0c/agentsync@latest`. Verify with `agentsync --version`.
 
 ## Development validation
 

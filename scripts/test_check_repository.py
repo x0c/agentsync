@@ -42,6 +42,14 @@ class RepositoryCheckTests(unittest.TestCase):
         problems = self.check("README.zh-CN.md", private_path + "\n" + private_ip)
         self.assertEqual(len(problems), 2)
 
+    def test_homebrew_linux_prefix_is_not_a_personal_home(self):
+        brew = "/" + "home" + "/linuxbrew/.linuxbrew/bin/brew"
+        self.assertEqual(self.check("workflow.yml", brew), [])
+        personal = "/" + "home" + "/example/project/"
+        self.assertIn("absolute home", self.check("workflow.yml", personal)[0])
+        lookalike = "/" + "home" + "/linuxbrewer/project/"
+        self.assertIn("absolute home", self.check("workflow.yml", lookalike)[0])
+
     def test_links_resolve_from_document_and_stay_inside_checkout(self):
         self.check("AGENTS.md", "# Instructions")
         self.assertEqual(self.check("docs/guide.md", "[Root](../AGENTS.md)"), [])

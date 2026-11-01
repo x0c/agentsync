@@ -10,7 +10,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 HAN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\U00020000-\U0002ebef]")
-PERSONAL_HOME = re.compile(r"/(?:Users|home)/[^/\s<>]+/")
+# Homebrew on Linux installs under the fixed system account /home/linuxbrew; it is not a personal home.
+PERSONAL_HOME = re.compile(r"/(?:Users|home)/(?!linuxbrew/)[^/\s<>]+/")
 PRIVATE_IP = re.compile(
     r"(?<![\d.])(?:10\.(?:\d{1,3}\.){2}\d{1,3}"
     r"|192\.168\.\d{1,3}\.\d{1,3}"

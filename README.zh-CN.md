@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/x0c/agentsync/main/install.sh | sh
 
 安装脚本会下载匹配的 Release 压缩包（Windows 为 `agentsync_windows_<arch>.zip`，macOS/Linux 为 `agentsync_<os>_<arch>.tar.gz`），并在安装前校验 SHA-256。`AGENTSYNC_INSTALL_DIR` 可覆盖默认安装目录（Windows 默认为 `%LOCALAPPDATA%\Programs\agentsync\bin`，macOS/Linux 默认为 `~/.local/bin`）；Windows 安装脚本会将其加入用户 PATH。
 
-**macOS — Homebrew：**
+**macOS / Linux — Homebrew：**
 
 ```sh
 brew install --cask x0c/tap/agentsync

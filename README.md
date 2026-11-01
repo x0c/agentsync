@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/x0c/agentsync/main/install.sh | sh
 
 The installers download the matching release archive (`agentsync_windows_<arch>.zip` on Windows, `agentsync_<os>_<arch>.tar.gz` on macOS/Linux) and verify its SHA-256 checksum before installing. `AGENTSYNC_INSTALL_DIR` overrides the default (`%LOCALAPPDATA%\Programs\agentsync\bin` on Windows, `~/.local/bin` on macOS/Linux); the Windows installer adds it to the user PATH.
 
-**macOS — Homebrew:**
+**macOS / Linux — Homebrew:**
 
 ```sh
 brew install --cask x0c/tap/agentsync
