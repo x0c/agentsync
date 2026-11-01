@@ -107,7 +107,7 @@ func TestUnmanagedCursorContentIsPreserved(t *testing.T) {
 					t.Fatal(err)
 				}
 				if err := os.Symlink(external, target); err != nil {
-					t.Fatal(err)
+					skipOnLinkPrivilegeDenied(t, err)
 				}
 			}
 			cfg := Config{Source: source, Targets: []Target{{Path: target, Mode: "cursor"}}}
@@ -148,7 +148,7 @@ func TestManagedCursorLinkDoesNotReimportStaleBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(external, target); err != nil {
-		t.Fatal(err)
+		skipOnLinkPrivilegeDenied(t, err)
 	}
 	cfg := Config{Source: source, Targets: []Target{{Path: target, Mode: "cursor"}}}
 	if _, err := syncConfig(cfg, Options{}); err != nil {

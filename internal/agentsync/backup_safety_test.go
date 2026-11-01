@@ -9,7 +9,7 @@ import (
 )
 
 func TestStorageRunBackupCollisionAndNamedRollback(t *testing.T) {
-	home, _ := newStorageTestHome(t)
+	home, config := newStorageTestHome(t)
 	paths := []string{
 		filepath.Join(home, ".config", "opencode", "AGENTS.md"),
 		filepath.Join(home, ".config__opencode", "AGENTS.md"),
@@ -50,9 +50,21 @@ func TestStorageRunBackupCollisionAndNamedRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, path := range paths {
-		if _, err := os.Readlink(path); err != nil {
-			t.Fatalf("latest rollback did not restore runtime alias %s: %v", path, err)
+		if symlinksAvailable(t) {
+			if _, err := os.Readlink(path); err != nil {
+				t.Fatalf("latest rollback did not restore runtime alias %s: %v", path, err)
+			}
+			continue
 		}
+		// Without symlink privilege the file alias is a hardlink, restored as
+		// a regular file: recoverability is proven by content matching the
+		// canonical source the alias pointed at (which carries the injected
+		// MCP notice by then).
+		canonical, err := os.ReadFile(filepath.Join(config, "AGENTS.md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertStorageFile(t, path, string(canonical))
 	}
 }
 

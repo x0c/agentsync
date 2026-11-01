@@ -13,6 +13,7 @@ This guide covers commands, report states, service setup, validation, and releas
 | Align repositories under a directory | `agentsync --all ~/projects` | Yes |
 | Adopt a reviewed merge draft | `agentsync --adopt <draft>` | Yes |
 | Restore the latest backup | `agentsync --rollback latest` | Yes |
+| Print the version | `agentsync --version` | No |
 | Replace conflicting entries after backup | `agentsync --force` | Yes |
 
 `main.go` maps flags into `Options`; `Run()` selects rollback, batch, repository, global, or watch execution. Synchronization reports instruction, skill, and MCP results separately. Positional arguments are unsupported and must be rejected before any write, even when followed by `--check`. Reject conflicting or inapplicable mode flags rather than silently ignoring them.
@@ -74,7 +75,7 @@ Instruction/skill-only changes with an unchanged policy skip MCP writes. MCP, po
 
 An empty, malformed, or missing-`mcpServers` canonical file is rejected without clearing installed configurations. Watch mode also rejects an explicitly empty server map while installed runtimes still contain servers. An intentional clear requires a one-shot apply.
 
-Watch cannot combine with `--check`, `--repo`, `--all`, `--adopt`, `--rollback`, or `--force`. Service setup uses the templates in `contrib/`; there is no `service install` command.
+Watch cannot combine with `--check`, `--repo`, `--all`, `--adopt`, `--rollback`, or `--force`. Service setup uses the templates in `contrib/`; there is no `service install` command. Templates exist for Linux (`contrib/systemd/`), macOS (`contrib/launchd/`), and Windows (`contrib/windows/`).
 
 On Linux, after installing the binary at the template's configured path:
 
@@ -86,6 +87,20 @@ systemctl --user enable --now agentsync.service
 ```
 
 The template defaults to `%h/.local/bin/agentsync --watch`. On macOS, copy `contrib/launchd/top.x0c.agentsync.plist`, set its executable path to the installed binary, and load it using launchd. After replacing an active watcher's binary, restart the service and verify it uses the replacement.
+
+On Windows, register `agentsync --watch` to run at user sign-in with no console window:
+
+```powershell
+contrib\windows\install-watcher.ps1 [-AgentsyncPath <path-to-agentsync.exe>]
+```
+
+The template resolves the executable from `PATH` by default, registers a per-user scheduled task (`agentsync-watch`) with a logon trigger and `InteractiveToken`, and reruns are idempotent: an up-to-date registration is reported without changes. To remove exactly what install created:
+
+```powershell
+contrib\windows\uninstall-watcher.ps1
+```
+
+The uninstaller unregisters the task and stops any recorded running watcher processes. Starting the task on demand outside an interactive sign-in can be refused by Windows (`Last Result 267011`); real sign-in behavior is not observable over a remote session.
 
 ## Repository and batch modes
 
@@ -129,6 +144,20 @@ A Cursor target reporting `linked` or `ok` proves filesystem synchronization. Se
 
 Open a concrete project workspace and start a fresh session. Ask it to quote a distinctive heading from the canonical instructions. If necessary, use Cursor's User Rules text setting or explicitly reference the `.mdc` file in chat. Verify the session's actual content rather than relying on the Settings list. See the [path guide](agent_runtime_global_paths.md#loading-and-confidence-limits) for scope and sources; these are compatibility observations, not a promise about every Cursor version.
 
+## Installation
+
+One-line installers fetch the matching release archive and verify its SHA-256 checksum against the release `checksums.txt` before installing:
+
+```powershell
+irm https://raw.githubusercontent.com/x0c/agentsync/main/install.ps1 | iex
+```
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/x0c/agentsync/main/install.sh | sh
+```
+
+`install.ps1` targets Windows on amd64 and arm64 (archive `agentsync_windows_<arch>.zip`) and defaults to `%LOCALAPPDATA%\Programs\agentsync\bin`, adding it to the user PATH. `install.sh` targets macOS and Linux on amd64 and arm64 (archive `agentsync_<os>_<arch>.tar.gz`) and defaults to `~/.local/bin`, printing a PATH hint when that directory is not on PATH. Both accept `AGENTSYNC_INSTALL_DIR` to override the destination and `AGENTSYNC_VERSION` to pin a release; neither uses elevated privileges. macOS users can alternatively run `brew install --cask x0c/tap/agentsync`, and any OS with Go 1.25.8+ can run `go install github.com/x0c/agentsync@latest`. Verify with `agentsync --version`.
+
 ## Development validation
 
 Run the commands in [repository instructions](../AGENTS.md#validation-and-release). Tests must use temporary configuration roots. Review complete output, including warnings.
@@ -149,7 +178,7 @@ For installation, choose a directory on `PATH` and set `GOBIN` explicitly. Check
 
 ## Releases
 
-Choose the next unused version, commit the validated workspace, tag that commit, and push the branch and tag. The tag workflow reuses CI for the same commit on Linux, macOS, and Windows before running GoReleaser. Archives cover macOS/Linux amd64 and arm64, and Windows amd64; Windows arm64 is excluded in `.goreleaser.yml`.
+Choose the next unused version, commit the validated workspace, tag that commit, and push the branch and tag. The tag workflow reuses CI for the same commit on Linux, macOS, and Windows before running GoReleaser. Archives cover macOS, Linux, and Windows on amd64 and arm64; Windows ships as `.zip` while macOS/Linux ship as `.tar.gz`.
 
 The release token needs repository write permission. `HOMEBREW_TAP_GITHUB_TOKEN` needs write access to `x0c/homebrew-tap`. Confirm the published archive list, checksums, latest release, and cask version. Release notes use English first followed by a complete Simplified Chinese translation. `CHANGELOG.md` is the repository checker's designated bilingual notes source; other contributor documents remain English. The tagged release workflow extracts that exact version's section and refuses missing or incomplete bilingual notes before publishing. New backup names cannot recover payloads already overwritten by older versions; ambiguous legacy manifests are rejected rather than restored into the wrong paths.
 
@@ -163,6 +192,8 @@ goreleaser release --clean --release-notes /path/to/reviewed-notes.md
 Use authenticated release/tap tokens from the environment without logging them. Run this only after the same tagged commit has passed the required platform validation and when the automated publisher is not publishing the same tag. This is the same packaging configuration used by CI; do not bypass failed validation or publish from a dirty tree.
 
 Long remote CI/publication waits may run in a traceable background process. Keep the run URL and completion log, and report pending outcomes accurately. A successful upload alone does not establish installability: validate the downloaded archive and installed command through preview, apply, and recheck.
+
+A manual installer verification workflow (`Installers`, `.github/workflows/install.yml`) exercises `install.sh` (macOS/Linux) and `install.ps1` (Windows) against a published release and runs `agentsync --version` on the result; a Linux job also tries the Homebrew cask. It installs what is already published, so trigger it after each release (releases before 1.1.0 lack `--version`) and whenever the installers change.
 
 ### Retained Homebrew compatibility warning
 

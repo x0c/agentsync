@@ -168,7 +168,7 @@ func readableContentPath(path string) string {
 	if info.Mode().IsRegular() {
 		return path
 	}
-	if info.Mode()&os.ModeSymlink == 0 {
+	if !isManagedLink(info) {
 		return ""
 	}
 	target, err := os.Readlink(path)
@@ -222,7 +222,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 	if err != nil {
 		return result, "", err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	if isManagedLink(info) {
 		// Cursor mode requires a managed file with frontmatter, not a bare source symlink.
 		if target.Mode == "cursor" {
 			if opts.Check {
@@ -250,7 +250,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 			result.Detail = kind
 			return result, backup, nil
 		}
-		if symlinkPointsTo(target.Path, source) {
+		if linkPointsTo(target.Path, source) {
 			result.Status = "ok"
 			result.Detail = "symlink"
 			return result, "", nil

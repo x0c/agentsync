@@ -26,7 +26,7 @@ type backupManifest struct {
 type backupManifestEntry struct {
 	Original string `json:"original"`
 	Name     string `json:"name"`
-	Kind     string `json:"kind"` // file | symlink | dir
+	Kind     string `json:"kind"` // file | symlink | junction | dir
 }
 
 type backupSession struct {

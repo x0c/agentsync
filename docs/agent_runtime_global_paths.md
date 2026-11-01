@@ -39,6 +39,10 @@ A dash means agentsync does not create a dedicated target for that feature. A ru
 
 `PI_CODING_AGENT_DIR` overrides Pi's agent directory; the default is `~/.pi/agent`. Pi needs no additional skill alias because it can read the shared entry. `DSH_HOME` controls dsh MCP patch output; the instruction and skill entries above are the defaults currently defined in the target list. Do not infer that every runtime's configuration-root override applies to all agentsync features.
 
+## Windows linking
+
+Where the filesystem allows, instruction and skill targets use symbolic links. On Windows, skill directories fall back in this order: symbolic link, then NTFS directory junction, then a clear error that names Windows Developer Mode and `start ms-settings:developers`. There is no silent static copy for directories. The report detail for a junction target is `junction`.
+
 ## Loading and confidence limits
 
 - **Project and global scope differ.** agentsync repository mode manages `CLAUDE.md -> AGENTS.md`; it does not convert every vendor's project rule format or generate team rules.

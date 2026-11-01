@@ -128,6 +128,19 @@ func createAlias(source, target, mode string) (string, error) {
 		}
 		return "cursor-rule", nil
 	}
+	// Directory aliases (skill roots) never fall back to a static copy:
+	// on Windows try a symlink, then an NTFS junction, then fail with
+	// Developer Mode guidance. File aliases keep the symlink, hardlink,
+	// managed-copy order.
+	if isDirectorySource(source) {
+		return createDirAlias(source, target, mode)
+	}
+	return createFileAlias(source, target, mode)
+}
+
+// createDirAlias links a directory source. Junctions apply only on Windows
+// and only to directories.
+func createDirAlias(source, target, mode string) (string, error) {
 	linkTarget := source
 	if mode == "relative-link" {
 		rel, err := filepath.Rel(filepath.Dir(target), source)
@@ -135,7 +148,39 @@ func createAlias(source, target, mode string) (string, error) {
 			linkTarget = rel
 		}
 	}
-	if err := os.Symlink(linkTarget, target); err == nil {
+	symlinkErr := symlinkCreateFunc(linkTarget, target)
+	if symlinkErr == nil {
+		return "symlink", nil
+	}
+	// Junction fallback: on Windows this creates a real NTFS junction; off
+	// Windows createJunction fails, and tests may override junctionCreateFunc
+	// to verify the fallback order on every OS.
+	junctionSource := source
+	if !filepath.IsAbs(junctionSource) {
+		if abs, absErr := filepath.Abs(junctionSource); absErr == nil {
+			junctionSource = abs
+		}
+	}
+	if err := junctionCreateFunc(junctionSource, target); err == nil {
+		return "junction", nil
+	} else if runtime.GOOS == "windows" {
+		return "", developerModeError(target, symlinkErr, err)
+	} else {
+		// Off Windows there is no junction fallback; surface the symlink
+		// error instead of attempting a file-only managed copy of a directory.
+		return "", fmt.Errorf("cannot create directory alias for %s: symbolic link failed: %w", target, symlinkErr)
+	}
+}
+
+func createFileAlias(source, target, mode string) (string, error) {
+	linkTarget := source
+	if mode == "relative-link" {
+		rel, err := filepath.Rel(filepath.Dir(target), source)
+		if err == nil {
+			linkTarget = rel
+		}
+	}
+	if err := symlinkCreateFunc(linkTarget, target); err == nil {
 		return "symlink", nil
 	}
 	if runtime.GOOS == "windows" {
@@ -168,6 +213,35 @@ func backupFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// Managed links (symlinks and junctions) are backed up as their target
+	// string, never as directory contents. Check links before IsDir so a
+	// junction is never copied as a directory.
+	if isManagedLink(info) {
+		kind := linkKind(info)
+		target, err := os.Readlink(path)
+		if err != nil {
+			return "", fmt.Errorf("unsupported link at %s: %w", path, err)
+		}
+		stampDir, err := backupStampDir()
+		if err != nil {
+			return "", err
+		}
+		name, existing, err := backupPayloadName(stampDir, path, kind)
+		if err != nil {
+			return "", err
+		}
+		dst := filepath.Join(stampDir, name)
+		if existing {
+			return dst, nil
+		}
+		if err := writeNewBackupFile(dst, []byte(target+"\n"), 0o644); err != nil {
+			return "", err
+		}
+		if err := recordBackupEntryAt(stampDir, path, name, kind); err != nil {
+			return "", errors.Join(err, os.Remove(dst))
+		}
+		return dst, nil
+	}
 	if info.IsDir() {
 		return "", fmt.Errorf("refusing to back up directory %s", path)
 	}
@@ -176,28 +250,12 @@ func backupFile(path string) (string, error) {
 		return "", err
 	}
 	kind := "file"
-	if info.Mode()&os.ModeSymlink != 0 {
-		kind = "symlink"
-	}
 	name, existing, err := backupPayloadName(stampDir, path, kind)
 	if err != nil {
 		return "", err
 	}
 	dst := filepath.Join(stampDir, name)
 	if existing {
-		return dst, nil
-	}
-	if kind == "symlink" {
-		target, err := os.Readlink(path)
-		if err != nil {
-			return "", err
-		}
-		if err := writeNewBackupFile(dst, []byte(target+"\n"), 0o644); err != nil {
-			return "", err
-		}
-		if err := recordBackupEntryAt(stampDir, path, name, kind); err != nil {
-			return "", errors.Join(err, os.Remove(dst))
-		}
 		return dst, nil
 	}
 	data, err := os.ReadFile(path)
@@ -220,6 +278,10 @@ func backupAny(path string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		return "", err
+	}
+	// Back up junctions as links, never as directory contents.
+	if isManagedLink(info) {
+		return backupFile(path)
 	}
 	if !info.IsDir() {
 		return backupFile(path)
@@ -279,7 +341,7 @@ func copyDir(src, dst string) error {
 		if d.IsDir() {
 			return os.MkdirAll(target, info.Mode().Perm())
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if isManagedLink(info) {
 			linkTarget, err := os.Readlink(path)
 			if err != nil {
 				return err
@@ -287,7 +349,29 @@ func copyDir(src, dst string) error {
 			if err := ensureParent(target); err != nil {
 				return err
 			}
-			return os.Symlink(linkTarget, target)
+			if err := symlinkCreateFunc(linkTarget, target); err == nil {
+				return nil
+			} else if runtime.GOOS != "windows" {
+				return err
+			}
+			// On Windows, preserve directory junctions when the link target
+			// is a directory; file links fall back to the symlink error.
+			if targetInfo, statErr := os.Stat(linkTarget); statErr == nil && targetInfo.IsDir() {
+				absTarget := linkTarget
+				if !filepath.IsAbs(absTarget) {
+					absTarget = filepath.Join(filepath.Dir(path), linkTarget)
+				}
+				if abs, absErr := filepath.Abs(absTarget); absErr == nil {
+					absTarget = abs
+				}
+				return junctionCreateFunc(absTarget, target)
+			} else if !filepath.IsAbs(linkTarget) {
+				absTarget := filepath.Join(filepath.Dir(path), linkTarget)
+				if targetInfo, statErr := os.Stat(absTarget); statErr == nil && targetInfo.IsDir() {
+					return junctionCreateFunc(absTarget, target)
+				}
+			}
+			return err
 		}
 		if !info.Mode().IsRegular() {
 			return nil
@@ -354,15 +438,4 @@ func sanitizePath(path string) string {
 	path = strings.TrimLeft(path, string(filepath.Separator))
 	replacer := strings.NewReplacer("/", "__", "\\", "__", ":", "_")
 	return replacer.Replace(path)
-}
-
-func symlinkPointsTo(path, source string) bool {
-	target, err := os.Readlink(path)
-	if err != nil {
-		return false
-	}
-	if filepath.IsAbs(target) {
-		return samePath(target, source)
-	}
-	return samePath(filepath.Join(filepath.Dir(path), target), source)
 }

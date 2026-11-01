@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 )
@@ -170,7 +171,7 @@ func skillDirPath(path string, resolveSymlinks bool) string {
 	if err != nil {
 		return ""
 	}
-	if info.Mode()&os.ModeSymlink != 0 && resolveSymlinks {
+	if isManagedLink(info) && resolveSymlinks {
 		path, err = filepath.EvalSymlinks(path)
 		if err != nil {
 			return ""
@@ -203,7 +204,7 @@ func materializeCanonicalSkillLinks(root string, opts Options) ([]TargetResult, 
 		if err != nil {
 			return results, backups, err
 		}
-		if info.Mode()&os.ModeSymlink == 0 {
+		if !isManagedLink(info) {
 			continue
 		}
 		realPath := skillDirPath(path, true)
@@ -254,7 +255,20 @@ func materializeSkillLink(path, realPath string) (err error) {
 		return err
 	}
 	if err := os.Rename(temp, path); err != nil {
-		return errors.Join(err, os.Symlink(linkTarget, path))
+		// Restore the original link faithfully: symlinks stay symlinks,
+		// junctions are recreated as junctions on Windows.
+		if restoreErr := symlinkCreateFunc(linkTarget, path); restoreErr == nil {
+			return err
+		} else {
+			if runtime.GOOS == "windows" {
+				absTarget := linkTarget
+				if !filepath.IsAbs(absTarget) {
+					absTarget = filepath.Join(filepath.Dir(path), linkTarget)
+				}
+				return errors.Join(err, junctionCreateFunc(absTarget, path))
+			}
+			return errors.Join(err, restoreErr)
+		}
 	}
 	return nil
 }
@@ -278,7 +292,8 @@ func resolvedSkillPath(path string) (string, error) {
 			return "", err
 		}
 		// A dangling final symlink is replaceable; resolve its parent, not its target.
-		if info, statErr := os.Lstat(abs); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+		// Dangling junctions are handled the same way.
+		if info, statErr := os.Lstat(abs); statErr == nil && isManagedLink(info) {
 			parent, parentErr := filepath.EvalSymlinks(filepath.Dir(abs))
 			if parentErr != nil {
 				return "", parentErr
@@ -307,7 +322,7 @@ func validateSkillRootOverlap(source, target string) error {
 	if err != nil {
 		return err
 	}
-	if symlinkPointsTo(target, source) {
+	if linkPointsTo(target, source) {
 		// Removing a correct alias is safe only if its entry is outside the source.
 		parent, err := resolvedSkillPath(filepath.Dir(target))
 		if err != nil {
@@ -409,10 +424,14 @@ func syncSkillRootAlias(source, target string, opts Options) (TargetResult, stri
 	if err != nil {
 		return result, "", err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		if symlinkPointsTo(target, source) {
+	if isManagedLink(info) {
+		if linkPointsTo(target, source) {
 			result.Status = "ok"
-			result.Detail = "skill directory symlink"
+			if info.Mode()&os.ModeSymlink != 0 {
+				result.Detail = "skill directory symlink"
+			} else {
+				result.Detail = "skill directory junction"
+			}
 			return result, "", nil
 		}
 		if opts.Check {
@@ -424,6 +443,7 @@ func syncSkillRootAlias(source, target string, opts Options) (TargetResult, stri
 		if err != nil {
 			return result, "", err
 		}
+		// Removing a junction with Remove never touches its target's contents.
 		if err := os.Remove(target); err != nil {
 			return result, "", err
 		}
@@ -497,7 +517,8 @@ func syncSkillRootFiltered(source, target string, opts Options, kept, dropped []
 		if err != nil {
 			return result, backup, err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
+		if isManagedLink(info) {
+			// Removing a junction with Remove never touches its target.
 			if err := os.Remove(target); err != nil {
 				return result, backup, err
 			}
@@ -525,7 +546,7 @@ func filteredSkillRootMatches(source, target string, kept []string) (bool, error
 		}
 		return false, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 {
+	if isManagedLink(info) {
 		return false, nil
 	}
 	if !info.IsDir() {
@@ -550,7 +571,7 @@ func filteredSkillRootMatches(source, target string, kept []string) (bool, error
 			return false, nil
 		}
 		link := filepath.Join(target, name)
-		if !symlinkPointsTo(link, filepath.Join(source, name)) {
+		if !linkPointsTo(link, filepath.Join(source, name)) {
 			return false, nil
 		}
 	}
@@ -595,7 +616,12 @@ func materializeFilteredSkillRoot(source, target string, kept []string) error {
 	for _, name := range kept {
 		srcPath := filepath.Join(source, name)
 		dstPath := filepath.Join(target, name)
-		if err := os.Symlink(srcPath, dstPath); err != nil {
+		if err := symlinkCreateFunc(srcPath, dstPath); err == nil {
+			continue
+		} else if runtime.GOOS != "windows" {
+			return err
+		}
+		if err := junctionCreateFunc(srcPath, dstPath); err != nil {
 			return err
 		}
 	}

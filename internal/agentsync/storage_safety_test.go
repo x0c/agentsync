@@ -1,12 +1,14 @@
 package agentsync
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -53,11 +55,53 @@ func storageTestSymlink(t *testing.T, target, path string) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(target, path); err != nil {
-		if runtime.GOOS == "windows" && os.IsPermission(err) {
-			t.Skipf("symlink privilege unavailable: %v", err)
-		}
-		t.Fatal(err)
+		skipOnLinkPrivilegeDenied(t, err)
 	}
+}
+
+// isLinkPrivilegeError reports whether err is a symlink-creation denial for
+// lack of privilege: a Windows standard user without Developer Mode gets
+// ERROR_PRIVILEGE_NOT_HELD (1314), which os.IsPermission does not recognize,
+// so the syscall errno is checked directly.
+func isLinkPrivilegeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if os.IsPermission(err) {
+		return true
+	}
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return errno == 1314 // ERROR_PRIVILEGE_NOT_HELD
+	}
+	return false
+}
+
+// skipOnLinkPrivilegeDenied skips a symlink-dependent test when Windows
+// denies symlink creation for lack of privilege, and fails otherwise. Call it
+// wherever a test creates a symlink it cannot replace with a junction.
+func skipOnLinkPrivilegeDenied(t *testing.T, err error) {
+	t.Helper()
+	if runtime.GOOS == "windows" && isLinkPrivilegeError(err) {
+		t.Skipf("symlink privilege unavailable: %v", err)
+	}
+	t.Fatal(err)
+}
+
+// symlinksAvailable probes whether the test process can create symbolic
+// links. A Windows standard user without Developer Mode cannot; tests that
+// assert on code-created links must then degrade to content assertions
+// instead of failing.
+func symlinksAvailable(t *testing.T) bool {
+	t.Helper()
+	probeTarget := filepath.Join(t.TempDir(), "probe-target")
+	if err := os.WriteFile(probeTarget, []byte("x"), 0o644); err != nil {
+		return true // setup failure: let the real test surface it
+	}
+	if err := os.Symlink(probeTarget, probeTarget+"-link"); err != nil {
+		return false
+	}
+	return true
 }
 
 func storageTestSnapshot(t *testing.T, root string) map[string]string {
@@ -77,7 +121,7 @@ func storageTestSnapshot(t *testing.T, root string) map[string]string {
 		}
 		value := fmt.Sprintf("%v", info.Mode())
 		switch {
-		case info.Mode()&os.ModeSymlink != 0:
+		case isManagedLink(info):
 			target, err := os.Readlink(path)
 			if err != nil {
 				return err

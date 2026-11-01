@@ -6,7 +6,23 @@ next version's section. A `Release: minor` or `Release: major` line requests a
 larger version step; `Release: hold <reason>` keeps the changes unreleased until
 the named acceptance is done.
 
-## Unreleased
+## 1.1.0
+
+### English
+
+- Fix Windows skill-directory sync without symbolic-link permission (Developer Mode off, not elevated): skill folders now link through an NTFS directory junction instead of failing, and the CLI reports `junction`. Directories never fall back to a static copy; when a junction is impossible too (for example on a non-NTFS volume), agentsync stops with Developer Mode guidance. Backup, rollback, replacement and overlap checks recognize junctions and never touch their targets.
+- Add `agentsync --version`.
+- Add one-line installers: `install.ps1` for Windows (amd64/arm64, checksum-verified `agentsync_windows_<arch>.zip`) and `install.sh` for macOS/Linux (amd64/arm64, checksum-verified tarballs), with a manual installer verification workflow. Release archives now include Windows arm64.
+- Add Windows watcher templates (`contrib/windows/install-watcher.ps1`, `uninstall-watcher.ps1`): a per-user scheduled task runs `agentsync --watch` at sign-in with no console window; the uninstaller removes exactly what install created.
+- Document the full supported-tool list, per-tool skill/MCP filtering, `.gitignore`/`.stignore` gating for `mcp.json`, and Windows symlink-then-junction skill linking.
+
+### 简体中文
+
+- 修复 Windows 在没有符号链接权限时（未开开发者模式、非管理员）无法同步 Skill 目录的问题：Skill 文件夹改用 NTFS 目录联接（junction）链接，不再报错，命令输出显示 `junction`。目录绝不退回为静态副本；连联接也无法创建时（例如非 NTFS 卷），agentsync 会停止并提示开启开发者模式。备份、回滚、替换与重叠检查都能识别联接，且绝不改动其指向的内容。
+- 新增 `agentsync --version`。
+- 新增一键安装脚本：Windows 用 `install.ps1`（amd64/arm64，校验 `agentsync_windows_<arch>.zip` 的 SHA-256），macOS/Linux 用 `install.sh`（amd64/arm64，校验对应 tarball），并配有手动安装验证工作流。Release 归档新增 Windows arm64。
+- 新增 Windows 后台任务模板（`contrib/windows/install-watcher.ps1`、`uninstall-watcher.ps1`）：以按用户的计划任务在登录时运行 `agentsync --watch`，无控制台窗口；卸载脚本只移除安装时创建的内容。
+- 补齐文档：完整的支持工具列表、按工具的 Skill/MCP 过滤、`mcp.json` 的 `.gitignore`/`.stignore` 写入条件，以及 Windows 下先符号链接后目录联接（junction）的 Skill 链接方式。
 
 ## 1.0.0
 

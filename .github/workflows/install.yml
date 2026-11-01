@@ -1,0 +1,73 @@
+name: Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "agentsync version to install (default: latest release)"
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  install-sh:
+    name: Install (install.sh)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install with install.sh
+        env:
+          AGENTSYNC_INSTALL_DIR: ${{ runner.temp }}/agentsync-bin
+          AGENTSYNC_VERSION: ${{ inputs.version }}
+        run: sh install.sh
+
+      - name: Verify installation
+        run: ${{ runner.temp }}/agentsync-bin/agentsync --version
+
+  install-ps1:
+    name: Install (install.ps1)
+    # windows-11-arm becomes testable here once a published release ships
+    # agentsync_windows_arm64.zip (no such asset as of v1.0.0); the script
+    # already fails with a clear message in that case.
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install with install.ps1 under Windows PowerShell 5.1
+        env:
+          AGENTSYNC_INSTALL_DIR: ${{ runner.temp }}\agentsync-bin
+          AGENTSYNC_SKIP_PATH_UPDATE: "1"
+          AGENTSYNC_VERSION: ${{ inputs.version }}
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
+
+      - name: Verify installation
+        shell: pwsh
+        run: ${{ runner.temp }}\agentsync-bin\agentsync.exe --version
+
+  brew-cask:
+    name: Install (Homebrew cask, Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install from the tap when Homebrew is available
+        run: |
+          if ! command -v brew >/dev/null 2>&1; then
+            echo "Homebrew is not available on this runner; skipping."
+            exit 0
+          fi
+          brew install --cask x0c/tap/agentsync
+          agentsync --version

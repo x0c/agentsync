@@ -334,7 +334,7 @@ func TestSkillSyncMaterializesCanonicalSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(realSkill, canonicalLink); err != nil {
-		t.Fatal(err)
+		skipOnLinkPrivilegeDenied(t, err)
 	}
 	if _, err := syncConfig(cfg, Options{}); err != nil {
 		t.Fatalf("syncConfig() error = %v", err)
@@ -659,7 +659,7 @@ func TestCursorRuleReplacesBareSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(cfg.Source, cfg.Targets[0].Path); err != nil {
-		t.Fatal(err)
+		skipOnLinkPrivilegeDenied(t, err)
 	}
 
 	report, err := syncConfig(cfg, Options{})

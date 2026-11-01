@@ -94,7 +94,7 @@ Shallow clones or GitHub first screens of the following repositories were read b
 - Keep English and Chinese README structure, commands, platform limits, and safety statements aligned.
 - Keep About in the user's search words: Claude Code, Cursor, rules, skills, MCP configs, one source of truth. Use relevant topics (`skills`, `cursorrules`, `mcp-server`, `claude`), not unrelated trending tags.
 - Never retitle this README as a different product's `agentsync` playground, and never paste their screenshots or npm download badges.
-- Use macOS Homebrew cask instructions only for macOS. Published archives cover macOS and Linux on amd64/arm64, and Windows on amd64; do not imply Windows ARM has a native release.
+- Use Homebrew cask instructions only for platforms verified with a real install (macOS; Linux only after the installer workflow's Homebrew job actually installs it). Archives from 1.1.0 onward cover macOS, Linux and Windows on amd64/arm64; earlier releases have no Windows arm64 archive.
 - Verify release asset names and checksums before changing download instructions. New installation mechanisms need actual platform verification.
 - Recheck the frozen Best Match queries after index delay; also recheck views, unique visitors, referrers, and external stargazers after about 14 days. Keep overlapping windows separate; do not call views divided by total stars a conversion rate.
 - Public announcements and directory submissions are a separate outreach task. Prepare them from verified capabilities; publishing messages requires user authorization.

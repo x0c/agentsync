@@ -67,12 +67,15 @@ func TestCLIRejectsUnexpectedArgumentsWithoutWrites(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			home := cliTestHome(t)
 			before := cliTree(t, home)
-			var stderr bytes.Buffer
-			if code := runCLI(args, &stderr); code != 2 {
+			var stderr, stdout bytes.Buffer
+			if code := runCLI(args, &stderr, &stdout); code != 2 {
 				t.Fatalf("exit = %d, want usage exit 2; stderr=%s", code, &stderr)
 			}
 			if stderr.Len() == 0 {
 				t.Fatal("usage failure had no diagnostic")
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("usage failure wrote to stdout: %q", stdout.String())
 			}
 			if after := cliTree(t, home); !reflect.DeepEqual(before, after) {
 				t.Fatalf("invalid invocation wrote files: before=%v after=%v", before, after)
@@ -84,29 +87,93 @@ func TestCLIRejectsUnexpectedArgumentsWithoutWrites(t *testing.T) {
 func TestCLIHelpDoesNotWrite(t *testing.T) {
 	home := cliTestHome(t)
 	before := cliTree(t, home)
-	var stderr bytes.Buffer
-	if code := runCLI([]string{"--help"}, &stderr); code != 0 {
+	var stderr, stdout bytes.Buffer
+	if code := runCLI([]string{"--help"}, &stderr, &stdout); code != 0 {
 		t.Fatalf("help exit = %d: %s", code, &stderr)
 	}
 	if !strings.Contains(stderr.String(), "only inspect") {
 		t.Fatalf("help missing flag description: %s", &stderr)
+	}
+	if !strings.Contains(stderr.String(), "print the agentsync version") {
+		t.Fatalf("help missing version flag description: %s", &stderr)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("help wrote to stdout: %q", stdout.String())
 	}
 	if !reflect.DeepEqual(before, cliTree(t, home)) {
 		t.Fatal("help wrote files")
 	}
 }
 
+func TestCLIVersionPrintsNameAndVersion(t *testing.T) {
+	home := cliTestHome(t)
+	before := cliTree(t, home)
+	var stderr, stdout bytes.Buffer
+	if code := runCLI([]string{"--version"}, &stderr, &stdout); code != 0 {
+		t.Fatalf("version exit = %d: %s", code, &stderr)
+	}
+	want := "agentsync " + resolvedVersion() + "\n"
+	if stdout.String() != want {
+		t.Fatalf("version output = %q, want %q", stdout.String(), want)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("version wrote to stderr: %q", stderr.String())
+	}
+	if !reflect.DeepEqual(before, cliTree(t, home)) {
+		t.Fatal("version wrote files")
+	}
+}
+
+func TestCLIVersionWinsOverOtherArguments(t *testing.T) {
+	for _, args := range [][]string{
+		{"--version", "--check"},
+		{"--check", "--version"},
+		{"--version", "extra"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			home := cliTestHome(t)
+			before := cliTree(t, home)
+			var stderr, stdout bytes.Buffer
+			if code := runCLI(args, &stderr, &stdout); code != 0 {
+				t.Fatalf("exit = %d, want 0; stderr=%s", code, &stderr)
+			}
+			want := "agentsync " + resolvedVersion() + "\n"
+			if stdout.String() != want {
+				t.Fatalf("output = %q, want %q", stdout.String(), want)
+			}
+			if !reflect.DeepEqual(before, cliTree(t, home)) {
+				t.Fatal("version invocation wrote files")
+			}
+		})
+	}
+}
+
+func TestDisplayVersionFallback(t *testing.T) {
+	for _, tc := range []struct {
+		ldflags, build, want string
+	}{
+		{"1.2.3", "v9.9.9", "1.2.3"},
+		{"", "v1.2.3", "v1.2.3"},
+		{"", "", "dev"},
+		{"", "(devel)", "dev"},
+	} {
+		if got := displayVersion(tc.ldflags, tc.build); got != tc.want {
+			t.Errorf("displayVersion(%q, %q) = %q, want %q", tc.ldflags, tc.build, got, tc.want)
+		}
+	}
+}
+
 func TestCLIPreviewApplyAndRecheck(t *testing.T) {
 	home := cliTestHome(t)
 	before := cliTree(t, home)
-	var stderr bytes.Buffer
-	if code := runCLI([]string{"--check"}, &stderr); code != 0 {
+	var stderr, stdout bytes.Buffer
+	if code := runCLI([]string{"--check"}, &stderr, &stdout); code != 0 {
 		t.Fatalf("preview exit = %d: %s", code, &stderr)
 	}
 	if !reflect.DeepEqual(before, cliTree(t, home)) {
 		t.Fatal("preview wrote files")
 	}
-	if code := runCLI(nil, &stderr); code != 0 {
+	if code := runCLI(nil, &stderr, &stdout); code != 0 {
 		t.Fatalf("apply exit = %d: %s", code, &stderr)
 	}
 	canonical := filepath.Join(home, ".config", "agentsync", "AGENTS.md")
@@ -114,7 +181,7 @@ func TestCLIPreviewApplyAndRecheck(t *testing.T) {
 		t.Fatalf("apply did not create source: %v", err)
 	}
 	before = cliTree(t, home)
-	if code := runCLI([]string{"--check"}, &stderr); code != 0 {
+	if code := runCLI([]string{"--check"}, &stderr, &stdout); code != 0 {
 		t.Fatalf("recheck exit = %d: %s", code, &stderr)
 	}
 	if !reflect.DeepEqual(before, cliTree(t, home)) {
@@ -124,8 +191,8 @@ func TestCLIPreviewApplyAndRecheck(t *testing.T) {
 
 func TestCLIRuntimeFailureReturnsNonzero(t *testing.T) {
 	home := cliTestHome(t)
-	var stderr bytes.Buffer
-	if code := runCLI([]string{"--all", filepath.Join(home, "missing"), "--check"}, &stderr); code != 1 {
+	var stderr, stdout bytes.Buffer
+	if code := runCLI([]string{"--all", filepath.Join(home, "missing"), "--check"}, &stderr, &stdout); code != 1 {
 		t.Fatalf("missing root exit = %d, want 1: %s", code, &stderr)
 	}
 	if !strings.Contains(stderr.String(), "scan root") {

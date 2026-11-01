@@ -4,7 +4,7 @@
 
 **One command to share rules, skills, and MCP configs across your AI tools.**
 
-Keep one copy across 20+ tools on your machine, including Claude Code, Codex, Cursor, Pi, and OpenCode. A lightweight standalone binary.
+Keep one copy across Claude Code, Codex, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok CLI, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Pi, dsh, Cursor, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and Aider Desk, plus the shared `~/.agents` entry. A lightweight standalone binary.
 
 [![CI](https://github.com/x0c/agentsync/actions/workflows/ci.yml/badge.svg)](https://github.com/x0c/agentsync/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/x0c/agentsync)](https://github.com/x0c/agentsync/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -14,13 +14,27 @@ Keep one copy across 20+ tools on your machine, including Claude Code, Codex, Cu
 
 ## Install
 
+**Windows — PowerShell:**
+
+```powershell
+irm https://raw.githubusercontent.com/x0c/agentsync/main/install.ps1 | iex
+```
+
+**macOS / Linux — shell:**
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/x0c/agentsync/main/install.sh | sh
+```
+
+The installers download the matching release archive (`agentsync_windows_<arch>.zip` on Windows, `agentsync_<os>_<arch>.tar.gz` on macOS/Linux) and verify its SHA-256 checksum before installing. `AGENTSYNC_INSTALL_DIR` overrides the default (`%LOCALAPPDATA%\Programs\agentsync\bin` on Windows, `~/.local/bin` on macOS/Linux); the Windows installer adds it to the user PATH.
+
 **macOS — Homebrew:**
 
 ```sh
 brew install --cask x0c/tap/agentsync
 ```
 
-**macOS / Linux / Windows — Go 1.25.8+:**
+**Any OS — Go 1.25.8+:**
 
 ```sh
 go install github.com/x0c/agentsync@latest
@@ -28,17 +42,20 @@ go install github.com/x0c/agentsync@latest
 
 Add Go's bin directory to PATH if needed (usually `~/go/bin`; `%USERPROFILE%\go\bin` on Windows).
 
-**Without Go:** download and extract a [release binary](https://github.com/x0c/agentsync/releases/latest), then put it on PATH. Available for macOS and Linux (arm64 / amd64), and Windows (amd64). Checksums are included.
+**Without an installer or Go:** download and extract a [release binary](https://github.com/x0c/agentsync/releases/latest), then put it on PATH. Available for macOS and Linux (arm64 / amd64), and Windows (arm64 / amd64). Checksums are included.
 
 ## Run
 
+First preview, then apply:
+
 ```sh
+agentsync --check
 agentsync
 ```
 
 That's it. `agentsync` merges your existing instructions, collects your skill folders, and imports your MCP servers into one shared source — then links or writes them back to each installed tool in its native format. Files replaced during sync are backed up automatically; tools you haven't installed are skipped.
 
-From then on, maintain these files in `~/.config/agentsync/`:
+From then on, maintain these files in `~/.config/agentsync/` (`%USERPROFILE%\.config\agentsync\` on Windows):
 
 | File | What you manage once |
 |---|---|
@@ -56,6 +73,7 @@ Run `agentsync` again after changes, or use the optional watcher below.
 | Automatically apply source changes | `agentsync --watch` |
 | Restore the latest backup | `agentsync --rollback latest` |
 | Link a project's `CLAUDE.md` to its `AGENTS.md` | `agentsync --repo` |
+| Print the version | `agentsync --version` |
 
 See the [workflow guide](docs/AGENTSYNC_GUIDE.md) for background services, batch repository sync, filters, and backup details.
 
@@ -63,8 +81,9 @@ See the [workflow guide](docs/AGENTSYNC_GUIDE.md) for background services, batch
 
 - Default sync manages **global configuration on this machine**. Project files are handled by the separate repository mode.
 - Support varies by tool. See [instruction and skill support](docs/agent_runtime_global_paths.md) and [MCP support](docs/agent_runtime_mcp_paths.md).
-- Instructions and skills use links where possible. Cursor gets a managed `.mdc` rule; Windows can fall back to managed copies instead of links. See [Cursor loading limits](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt).
-- Edit the shared source. The watcher pushes changes out to your tools; it does not import edits made in another tool's settings. Keep `mcp.json` local: it may contain tokens and machine-specific paths.
+- Instructions and skills use links where possible. Cursor gets a managed `.mdc` rule; on Windows, skill directories link as a symbolic link first, then an NTFS directory junction, otherwise agentsync reports an error naming Windows Developer Mode. See [Cursor loading limits](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt).
+- Exclude servers, skills, or instructions per tool with a `sync-policy.json` beside the canonical sources; see [filtering](docs/AGENTSYNC_GUIDE.md#global-synchronization). Filtering never removes content from the canonical source.
+- Edit the shared source. The watcher pushes changes out to your tools; it does not import edits made in another tool's settings. Keep `mcp.json` local: it may contain tokens and machine-specific paths. `.gitignore` / `.stignore` entries protecting `mcp.json` are written only when the configuration directory is already a Git repository (`.git`) or a Syncthing folder (`.stfolder`).
 - Safety checks reject unsupported arguments, invalid MCP entries, and unsafe skill-directory overlaps. Your own rules are merged in before copies are generated; Codex servers that share a name keep their local restrictions and authentication options. Rollbacks use collision-resistant backup snapshots, and `latest` skips backups with no file changes. See the [preservation boundaries](docs/AGENTSYNC_KNOWLEDGE_BASE.md).
 
 Questions or a missing tool? [Open an issue](https://github.com/x0c/agentsync/issues) with the tool name, OS, and redacted output. Contributor instructions: [AGENTS.md](AGENTS.md).

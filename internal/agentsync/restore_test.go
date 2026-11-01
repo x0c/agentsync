@@ -102,7 +102,7 @@ func TestRollbackRestoresSymlinkAndDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(source, link); err != nil {
-		t.Fatal(err)
+		skipOnLinkPrivilegeDenied(t, err)
 	}
 	if err := os.MkdirAll(filepath.Join(skills, "demo"), 0o755); err != nil {
 		t.Fatal(err)

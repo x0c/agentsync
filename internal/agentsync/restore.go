@@ -114,7 +114,16 @@ func restoreManifestEntry(stampDir, backupsRoot string, entry backupManifestEntr
 			return result, backup, err
 		}
 		target := strings.TrimSpace(string(data))
-		if err := os.Symlink(target, abs); err != nil {
+		if err := symlinkCreateFunc(target, abs); err != nil {
+			return result, backup, err
+		}
+	case "junction":
+		data, err := os.ReadFile(stored)
+		if err != nil {
+			return result, backup, err
+		}
+		target := strings.TrimSpace(string(data))
+		if err := junctionCreateFunc(target, abs); err != nil {
 			return result, backup, err
 		}
 	case "dir":
@@ -178,7 +187,7 @@ func validateBackupPayload(stampDir string, entry backupManifestEntry) (string, 
 		return "", fmt.Errorf("backup payload unavailable: %s: %w", stored, err)
 	}
 	switch entry.Kind {
-	case "file", "symlink":
+	case "file", "symlink", "junction":
 		if !info.Mode().IsRegular() {
 			return "", fmt.Errorf("backup payload is not a regular file: %s", stored)
 		}
@@ -186,8 +195,8 @@ func validateBackupPayload(stampDir string, entry backupManifestEntry) (string, 
 		if err != nil {
 			return "", err
 		}
-		if entry.Kind == "symlink" && strings.TrimSpace(string(data)) == "" {
-			return "", fmt.Errorf("empty symlink target in %s", stored)
+		if (entry.Kind == "symlink" || entry.Kind == "junction") && strings.TrimSpace(string(data)) == "" {
+			return "", fmt.Errorf("empty link target in %s", stored)
 		}
 	case "dir":
 		if !info.IsDir() {
@@ -204,7 +213,7 @@ func validateBackupPayload(stampDir string, entry backupManifestEntry) (string, 
 
 func validateRestoreDestination(path string) error {
 	if info, err := os.Lstat(path); err == nil {
-		if !info.IsDir() && !info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 {
+		if !info.IsDir() && !info.Mode().IsRegular() && !isManagedLink(info) {
 			return fmt.Errorf("unsupported current entry type at %s", path)
 		}
 	} else if !os.IsNotExist(err) {
@@ -231,6 +240,11 @@ func removeExistingForRestore(path string) error {
 			return nil
 		}
 		return err
+	}
+	// Junctions must be removed with Remove, never RemoveAll, so the
+	// target's contents are never touched.
+	if isManagedLink(info) {
+		return os.Remove(path)
 	}
 	if info.IsDir() {
 		return os.RemoveAll(path)
