@@ -445,6 +445,38 @@ func TestDefaultGlobalConfigIncludesDsh(t *testing.T) {
 	}
 }
 
+func TestDefaultGlobalConfigIncludesAntigravity(t *testing.T) {
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".gemini", "AGENTS.md")) {
+		t.Fatalf("missing Antigravity instruction target: %+v", cfg.Targets)
+	}
+	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".gemini", "config", "skills")) {
+		t.Fatalf("missing Antigravity skill target: %+v", cfg.SkillTargets)
+	}
+	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".gemini", "antigravity-cli", "skills")) {
+		t.Fatalf("missing Antigravity CLI skill target: %+v", cfg.SkillTargets)
+	}
+	var antigravityMCP *MCPTarget
+	for i := range cfg.MCPTargets {
+		if strings.HasSuffix(cfg.MCPTargets[i].Path, filepath.Join(".gemini", "config", "mcp_config.json")) {
+			antigravityMCP = &cfg.MCPTargets[i]
+			break
+		}
+	}
+	if antigravityMCP == nil {
+		t.Fatalf("missing Antigravity MCP target: %+v", cfg.MCPTargets)
+	}
+	if antigravityMCP.Dialect != "windsurf" {
+		t.Fatalf("Antigravity MCP dialect should be windsurf, got %q", antigravityMCP.Dialect)
+	}
+	if antigravityMCP.Mode != "file" {
+		t.Fatalf("Antigravity MCP mode should be file, got %q", antigravityMCP.Mode)
+	}
+}
+
 func TestDefaultGlobalConfigIncludesCursor(t *testing.T) {
 	cfg, err := defaultGlobalConfig()
 	if err != nil {

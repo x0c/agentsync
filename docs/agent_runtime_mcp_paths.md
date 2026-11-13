@@ -65,6 +65,7 @@ Codex bundled local servers stay available to Codex but are filtered from other 
 | Claude Code | `~/.claude.json` | key | JSON `mcpServers` |
 | OpenCode | `~/.config/opencode/opencode.json` or existing JSONC | key | Flat `mcp.<name>` |
 | Gemini CLI | `~/.gemini/settings.json` | key | `mcpServers` |
+| Antigravity | `~/.gemini/config/mcp_config.json` | file | `mcpServers`, remote `serverUrl` |
 | Qwen Code | `~/.qwen/settings.json` | key | Gemini dialect |
 | Copilot CLI | `~/.copilot/mcp-config.json` | file | `mcpServers` |
 | Kimi Code | `~/.kimi-code/mcp.json` | file | `mcpServers` |
@@ -140,6 +141,7 @@ Isolated tests cover selection, explicit modes, policy, preview, native-option p
 - Amp uses the literal dotted user-level key; a project `.amp/settings.json` has a separate approval scope.
 - Goose uses an `extensions` map, not a list or an extra `config:` wrapper from internal Rust structures.
 - iFlow has no implemented MCP target. Any future compatibility work must separately validate its effective settings path.
+- Antigravity reuses the `windsurf` dialect (`serverUrl`, no `type`) for `~/.gemini/config/mcp_config.json`. Legacy `~/.gemini/antigravity*/mcp_config.json` paths are not written. `disabled`, `disabledTools`, `oauth`, and `authProviderType` are not synced.
 
 ## Conversion reference
 

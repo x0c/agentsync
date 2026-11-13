@@ -99,6 +99,70 @@ func TestSyncMCPJoyCodeDoesNotCreateDetect(t *testing.T) {
 	}
 }
 
+func TestSyncMCPAntigravityRendersServerUrl(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	detect := filepath.Join(dir, ".gemini", "config")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(detect, "mcp_config.json")
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "antigravity",
+			Path:    target,
+			Detect:  detect,
+			Dialect: "windsurf",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if err := os.WriteFile(cfg.Source, []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := `{"mcpServers":{"local-srv":{"command":"npx","args":["-y","pkg"],"env":{"K":"V"}},"remote-srv":{"url":"https://example.com/mcp","headers":{"Authorization":"Bearer T"}}}}`
+	if err := os.WriteFile(cfg.MCPSource, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("antigravity target is not valid JSON: %v", err)
+	}
+	servers, ok := root["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatalf("antigravity target missing mcpServers: %s", data)
+	}
+	remote, ok := servers["remote-srv"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing remote-srv: %s", data)
+	}
+	if remote["serverUrl"] != "https://example.com/mcp" {
+		t.Fatalf("remote server should use serverUrl, got %s", data)
+	}
+	if _, hasURL := remote["url"]; hasURL {
+		t.Fatalf("remote server should not carry url key, got %s", data)
+	}
+	local, ok := servers["local-srv"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing local-srv: %s", data)
+	}
+	if local["command"] != "npx" {
+		t.Fatalf("local server should keep command, got %s", data)
+	}
+	if _, hasType := local["type"]; hasType {
+		t.Fatalf("antigravity entries should omit type, got %s", data)
+	}
+}
+
 func TestSyncMCPPiWritesSharedGlobalConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))

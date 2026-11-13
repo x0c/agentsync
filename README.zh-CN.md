@@ -4,7 +4,7 @@
 
 **一条命令，统一管理 AI 工具的规则、Skills 和 MCP 配置。**
 
-Claude Code、Codex、OpenCode、Gemini CLI、Qwen Code、Copilot CLI、Kimi Code、Grok CLI、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Pi、dsh、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode、Aider Desk 共 25 款工具，外加共享的 `~/.agents` 入口，本机只维护一份配置。轻量，单个可执行文件。
+Claude Code、Codex、OpenCode、Gemini CLI、Antigravity、Qwen Code、Copilot CLI、Kimi Code、Grok CLI、Amp、Crush、Goose、Factory Droid、iFlow、Kilo、Pi、dsh、Cursor、Windsurf、Zed、CodeBuddy、Qoder、Junie、Kiro、JoyCode、Aider Desk 共 26 款工具，外加共享的 `~/.agents` 入口，本机只维护一份配置。轻量，单个可执行文件。
 
 [![CI](https://github.com/x0c/agentsync/actions/workflows/ci.yml/badge.svg)](https://github.com/x0c/agentsync/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/x0c/agentsync)](https://github.com/x0c/agentsync/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 

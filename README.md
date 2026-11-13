@@ -4,7 +4,7 @@
 
 **One command to share rules, skills, and MCP configs across your AI tools.**
 
-Keep one copy across Claude Code, Codex, OpenCode, Gemini CLI, Qwen Code, Copilot CLI, Kimi Code, Grok CLI, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Pi, dsh, Cursor, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and Aider Desk, plus the shared `~/.agents` entry. A lightweight standalone binary.
+Keep one copy across Claude Code, Codex, OpenCode, Gemini CLI, Antigravity, Qwen Code, Copilot CLI, Kimi Code, Grok CLI, Amp, Crush, Goose, Factory Droid, iFlow, Kilo, Pi, dsh, Cursor, Windsurf, Zed, CodeBuddy, Qoder, Junie, Kiro, JoyCode, and Aider Desk, plus the shared `~/.agents` entry. A lightweight standalone binary.
 
 [![CI](https://github.com/x0c/agentsync/actions/workflows/ci.yml/badge.svg)](https://github.com/x0c/agentsync/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/x0c/agentsync)](https://github.com/x0c/agentsync/releases/latest) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 

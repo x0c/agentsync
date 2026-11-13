@@ -14,6 +14,8 @@ A dash means agentsync does not create a dedicated target for that feature. A ru
 | Codex | `~/.codex/AGENTS.md` | `~/.codex/skills/` |
 | OpenCode | `~/.config/opencode/AGENTS.md` | `~/.config/opencode/skills/` |
 | Gemini CLI | `~/.gemini/GEMINI.md` | - |
+| Antigravity | `~/.gemini/AGENTS.md` (shares `~/.gemini/GEMINI.md`) | `~/.gemini/config/skills/` |
+| Antigravity CLI | `~/.gemini/AGENTS.md` (shares `~/.gemini/GEMINI.md`) | `~/.gemini/antigravity-cli/skills/` |
 | Qwen Code | `~/.qwen/QWEN.md` | `~/.qwen/skills/` |
 | GitHub Copilot CLI | `~/.copilot/copilot-instructions.md` | `~/.copilot/skills/` |
 | Kimi Code | `~/.kimi-code/AGENTS.md` | `~/.kimi-code/skills/` |
@@ -52,6 +54,7 @@ Where the filesystem allows, instruction and skill targets use symbolic links. O
 - **Kimi generations.** Legacy `kimi-cli` used `~/.kimi/`; this implementation targets Kimi Code under `~/.kimi-code/`. Do not create both generations' entries as a precaution.
 - **JoyCode confidence.** Public rule-path documentation was incomplete in the original survey. The MCP path has extension-source evidence; that does not establish the same confidence for instruction or skill loading. Do not confuse a maintained compatibility target with a verified injection contract.
 - **Grok identity.** The Grok target refers to the community `superagent-ai/grok-cli` implementation. Do not imply that the path is an official xAI CLI standard.
+- **Antigravity shares the Gemini home.** Antigravity App/CLI/IDE all read global rules from `~/.gemini/AGENTS.md` / `~/.gemini/GEMINI.md` / `~/.gemini/config/`, per [Antigravity rules](https://antigravity.google/docs/rules). The `~/.gemini/AGENTS.md` target therefore fires for any `~/.gemini` installation (including Gemini-only); the `config/skills` and `mcp_config.json` targets gate on `~/.gemini/config`, and the CLI skills target gates on `~/.gemini/antigravity-cli`. Only the CLI skills split (`config/skills` vs `antigravity-cli/skills`) is per-surface; see [skills](https://antigravity.google/docs/skills) and [MCP](https://antigravity.google/docs/mcp). Runtime-specific switches (`disabled`, `disabledTools`, `oauth`, `authProviderType`) are not synced, consistent with other dialects.
 - **Unsupported survey entries.** Broader historical research included tools with cloud-only rules, unpublished paths, or no matching agentsync target. Their presence in an ecosystem survey is not feature support. Add a runtime only with a validated path, installation gate, tests, and aligned public documentation.
 
 Runtime discovery, precedence, enterprise controls, trust, and prompt-size limits belong to the runtime. Do not generalize one client's ordering or memory behavior to all others. Filesystem synchronization does not establish prompt injection.
