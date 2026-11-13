@@ -24,7 +24,7 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.config/opencode/AGENTS.md", Mode: "link", Detect: "~/.config/opencode"},
 		{Path: "~/.claude/CLAUDE.md", Mode: "claude", Detect: "~/.claude"},
 		{Path: "~/.gemini/GEMINI.md", Mode: "link", Detect: "~/.gemini"},
-		{Path: "~/.gemini/AGENTS.md", Mode: "link", Detect: "~/.gemini"},
+		{Path: "~/.gemini/AGENTS.md", Mode: "link", Detect: "~/.gemini/config"},
 		{Path: "~/.qwen/QWEN.md", Mode: "link", Detect: "~/.qwen"},
 		{Path: "~/.copilot/copilot-instructions.md", Mode: "link", Detect: "~/.copilot"},
 		{Path: "~/.kimi-code/AGENTS.md", Mode: "link", Detect: "~/.kimi-code"},

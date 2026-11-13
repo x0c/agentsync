@@ -126,6 +126,9 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 	}
 
 	// Complete imports before generating copies, regardless of target ordering.
+	// Note: same-home pairs (e.g. ~/.gemini/GEMINI.md + ~/.gemini/AGENTS.md) with
+	// differing pre-existing content are both appended to the source on first
+	// import, so overlapping sections may duplicate once until deduped in source.
 	if !opts.Check && !opts.Force {
 		for _, target := range cfg.Targets {
 			if _, err := importInstructionTarget(cfg.Source, target); err != nil {

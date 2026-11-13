@@ -1,6 +1,7 @@
 package agentsync
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -450,18 +451,50 @@ func TestDefaultGlobalConfigIncludesAntigravity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("defaultGlobalConfig() error = %v", err)
 	}
-	if !hasPathSuffix(targetPaths(cfg.Targets), filepath.Join(".gemini", "AGENTS.md")) {
+	var antigravityTarget *Target
+	for i := range cfg.Targets {
+		if strings.HasSuffix(cfg.Targets[i].Path, filepath.Join(".gemini", "AGENTS.md")) {
+			antigravityTarget = &cfg.Targets[i]
+			break
+		}
+	}
+	if antigravityTarget == nil {
 		t.Fatalf("missing Antigravity instruction target: %+v", cfg.Targets)
 	}
-	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".gemini", "config", "skills")) {
-		t.Fatalf("missing Antigravity skill target: %+v", cfg.SkillTargets)
+	if antigravityTarget.Mode != "link" {
+		t.Fatalf("Antigravity instruction target mode should be link, got %q", antigravityTarget.Mode)
 	}
-	if !hasPathSuffix(skillTargetPaths(cfg.SkillTargets), filepath.Join(".gemini", "antigravity-cli", "skills")) {
-		t.Fatalf("missing Antigravity CLI skill target: %+v", cfg.SkillTargets)
+	if !strings.HasSuffix(antigravityTarget.Detect, filepath.Join(".gemini", "config")) {
+		t.Fatalf("Antigravity instruction Detect should be ~/.gemini/config, got %q", antigravityTarget.Detect)
+	}
+	for _, want := range []struct {
+		name   string
+		suffix string
+		detect string
+	}{
+		{"antigravity", filepath.Join(".gemini", "config", "skills"), filepath.Join(".gemini", "config")},
+		{"antigravity-cli", filepath.Join(".gemini", "antigravity-cli", "skills"), filepath.Join(".gemini", "antigravity-cli")},
+	} {
+		var found *SkillTarget
+		for i := range cfg.SkillTargets {
+			if cfg.SkillTargets[i].Name == want.name {
+				found = &cfg.SkillTargets[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Fatalf("missing Antigravity skill target %q: %+v", want.name, cfg.SkillTargets)
+		}
+		if !strings.HasSuffix(found.Path, want.suffix) {
+			t.Fatalf("skill target %q path should end with %q, got %q", want.name, want.suffix, found.Path)
+		}
+		if !strings.HasSuffix(found.Detect, want.detect) {
+			t.Fatalf("skill target %q Detect should end with %q, got %q", want.name, want.detect, found.Detect)
+		}
 	}
 	var antigravityMCP *MCPTarget
 	for i := range cfg.MCPTargets {
-		if strings.HasSuffix(cfg.MCPTargets[i].Path, filepath.Join(".gemini", "config", "mcp_config.json")) {
+		if cfg.MCPTargets[i].Name == "antigravity" {
 			antigravityMCP = &cfg.MCPTargets[i]
 			break
 		}
@@ -469,11 +502,176 @@ func TestDefaultGlobalConfigIncludesAntigravity(t *testing.T) {
 	if antigravityMCP == nil {
 		t.Fatalf("missing Antigravity MCP target: %+v", cfg.MCPTargets)
 	}
+	if !strings.HasSuffix(antigravityMCP.Path, filepath.Join(".gemini", "config", "mcp_config.json")) {
+		t.Fatalf("Antigravity MCP path mismatch, got %q", antigravityMCP.Path)
+	}
+	if !strings.HasSuffix(antigravityMCP.Detect, filepath.Join(".gemini", "config")) {
+		t.Fatalf("Antigravity MCP Detect should be ~/.gemini/config, got %q", antigravityMCP.Detect)
+	}
 	if antigravityMCP.Dialect != "windsurf" {
 		t.Fatalf("Antigravity MCP dialect should be windsurf, got %q", antigravityMCP.Dialect)
 	}
+	if antigravityMCP.Format != "json" {
+		t.Fatalf("Antigravity MCP format should be json, got %q", antigravityMCP.Format)
+	}
 	if antigravityMCP.Mode != "file" {
 		t.Fatalf("Antigravity MCP mode should be file, got %q", antigravityMCP.Mode)
+	}
+}
+
+func TestAntigravityGatesOnConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	geminiHome := filepath.Join(dir, ".gemini")
+	if err := os.MkdirAll(geminiHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(dir, "source", "AGENTS.md")
+	skillSource := filepath.Join(dir, "source", "skills")
+	mcpSource := filepath.Join(dir, "source", "mcp.json")
+	for _, p := range []string{source, mcpSource} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(source, []byte("# rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mcpSource, []byte(`{"mcpServers":{"s":{"command":"x"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(skillSource, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configDir := filepath.Join(geminiHome, "config")
+	cfg := Config{
+		Source:      source,
+		SkillSource: skillSource,
+		MCPSource:   mcpSource,
+		Targets: []Target{
+			{Path: filepath.Join(geminiHome, "GEMINI.md"), Mode: "link", Detect: geminiHome},
+			{Path: filepath.Join(geminiHome, "AGENTS.md"), Mode: "link", Detect: configDir},
+		},
+		SkillTargets: []SkillTarget{
+			{Name: "antigravity", Path: filepath.Join(configDir, "skills"), Detect: configDir},
+		},
+		MCPTargets: []MCPTarget{
+			{Name: "antigravity", Path: filepath.Join(configDir, "mcp_config.json"), Detect: configDir, Dialect: "windsurf", Format: "json", Mode: "file"},
+		},
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	if !pathExists(filepath.Join(geminiHome, "GEMINI.md")) {
+		t.Fatalf("GEMINI.md should link on plain ~/.gemini: %+v", report.Results)
+	}
+	for _, p := range []string{
+		filepath.Join(geminiHome, "AGENTS.md"),
+		filepath.Join(configDir, "skills"),
+		filepath.Join(configDir, "mcp_config.json"),
+	} {
+		if pathExists(p) {
+			t.Fatalf("Antigravity target must stay absent without ~/.gemini/config: %q created", p)
+		}
+	}
+	statusOf := func(results []TargetResult, path string) string {
+		for _, r := range results {
+			if r.Path == path {
+				return r.Status
+			}
+		}
+		return ""
+	}
+	if got := statusOf(report.Results, filepath.Join(geminiHome, "AGENTS.md")); got != "skipped" {
+		t.Fatalf("AGENTS.md should be skipped without config dir, got %q: %+v", got, report.Results)
+	}
+	if got := statusOf(report.SkillResults, filepath.Join(configDir, "skills")); got != "skipped" {
+		t.Fatalf("config skills should be skipped without config dir, got %q: %+v", got, report.SkillResults)
+	}
+	if got := statusOf(report.MCPResults, filepath.Join(configDir, "mcp_config.json")); got != "skipped" {
+		t.Fatalf("mcp_config.json should be skipped without config dir, got %q: %+v", got, report.MCPResults)
+	}
+}
+
+func TestAntigravityPolicyKeysAreIndependent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	configDir := filepath.Join(dir, ".gemini", "config")
+	cliDir := filepath.Join(dir, ".gemini", "antigravity-cli")
+	for _, d := range []string{configDir, cliDir} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	skillSource := filepath.Join(dir, "skills")
+	for _, name := range []string{"keep-me", "drop-me"} {
+		p := filepath.Join(skillSource, name)
+		if err := os.MkdirAll(p, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(p, "SKILL.md"), []byte("# "+name+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mcpSource := filepath.Join(dir, "mcp.json")
+	if err := os.WriteFile(mcpSource, []byte(`{"mcpServers":{"keep-me":{"command":"keep"},"drop-me":{"command":"drop"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	policyPath := filepath.Join(dir, "sync-policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{
+  "skills": {"default": "allow", "targets": {"antigravity-cli": {"deny": ["drop-me"]}}},
+  "mcp": {"default": "allow", "targets": {"antigravity": {"deny": ["drop-me"]}}}
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:      filepath.Join(dir, "AGENTS.md"),
+		SkillSource: skillSource,
+		MCPSource:   mcpSource,
+		PolicyPath:  policyPath,
+		SkillTargets: []SkillTarget{
+			{Name: "antigravity", Path: filepath.Join(configDir, "skills"), Detect: configDir},
+			{Name: "antigravity-cli", Path: filepath.Join(cliDir, "skills"), Detect: cliDir},
+		},
+		MCPTargets: []MCPTarget{
+			{Name: "antigravity", Path: filepath.Join(configDir, "mcp_config.json"), Detect: configDir, Dialect: "windsurf", Format: "json", Mode: "file"},
+		},
+	}
+	if err := os.WriteFile(cfg.Source, []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	if !symlinkPointsTo(cfg.SkillTargets[0].Path, skillSource) {
+		t.Fatal("unfiltered antigravity skills should keep root symlink")
+	}
+	cliSkills := cfg.SkillTargets[1].Path
+	if symlinkPointsTo(cliSkills, skillSource) {
+		t.Fatal("filtered antigravity-cli skills must not be a root symlink")
+	}
+	if pathExists(filepath.Join(cliSkills, "drop-me")) {
+		t.Fatal("antigravity-cli should not expose denied skill")
+	}
+	if !pathExists(filepath.Join(configDir, "skills", "drop-me")) {
+		t.Fatal("denying antigravity-cli must not strip the independent antigravity target")
+	}
+	data, err := os.ReadFile(cfg.MCPTargets[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatal(err)
+	}
+	servers, _ := root["mcpServers"].(map[string]any)
+	if _, ok := servers["drop-me"]; ok {
+		t.Fatal("antigravity MCP should drop denied server")
+	}
+	if _, ok := servers["keep-me"]; !ok {
+		t.Fatal("antigravity MCP should keep allowed server")
 	}
 }
 

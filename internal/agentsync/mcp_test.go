@@ -151,6 +151,10 @@ func TestSyncMCPAntigravityRendersServerUrl(t *testing.T) {
 	if _, hasURL := remote["url"]; hasURL {
 		t.Fatalf("remote server should not carry url key, got %s", data)
 	}
+	headers, ok := remote["headers"].(map[string]any)
+	if !ok || headers["Authorization"] != "Bearer T" {
+		t.Fatalf("remote server should keep headers, got %s", data)
+	}
 	local, ok := servers["local-srv"].(map[string]any)
 	if !ok {
 		t.Fatalf("missing local-srv: %s", data)
@@ -158,8 +162,142 @@ func TestSyncMCPAntigravityRendersServerUrl(t *testing.T) {
 	if local["command"] != "npx" {
 		t.Fatalf("local server should keep command, got %s", data)
 	}
+	args, ok := local["args"].([]any)
+	if !ok || len(args) != 2 || args[0] != "-y" || args[1] != "pkg" {
+		t.Fatalf("local server should keep args, got %s", data)
+	}
+	env, ok := local["env"].(map[string]any)
+	if !ok || env["K"] != "V" {
+		t.Fatalf("local server should keep env, got %s", data)
+	}
 	if _, hasType := local["type"]; hasType {
 		t.Fatalf("antigravity entries should omit type, got %s", data)
+	}
+	if fi, err := os.Stat(target); err != nil {
+		t.Fatal(err)
+	} else if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("new antigravity target should be 0600, got %o", fi.Mode().Perm())
+	}
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("second syncConfig() error = %v", err)
+	}
+	for _, r := range report.MCPResults {
+		if r.Path == target && r.Status != "ok" {
+			t.Fatalf("second run should be idempotent, got %+v", r)
+		}
+	}
+}
+
+func TestSyncMCPAntigravityRoundTripServerUrl(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	detect := filepath.Join(dir, ".gemini", "config")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(detect, "mcp_config.json")
+	existing := `{"mcpServers":{"imported":{"serverUrl":"https://example.com/mcp","headers":{"Authorization":"Bearer T"}}}}`
+	if err := os.WriteFile(target, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "antigravity",
+			Path:    target,
+			Detect:  detect,
+			Dialect: "windsurf",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if err := os.WriteFile(cfg.Source, []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	data, err := os.ReadFile(cfg.MCPSource)
+	if err != nil {
+		t.Fatalf("canonical should be imported from antigravity target: %v", err)
+	}
+	var canonical map[string]any
+	if err := json.Unmarshal(data, &canonical); err != nil {
+		t.Fatal(err)
+	}
+	imported, ok := canonical["mcpServers"].(map[string]any)["imported"].(map[string]any)
+	if !ok || imported["url"] != "https://example.com/mcp" {
+		t.Fatalf("imported canonical should carry url, got %s", data)
+	}
+	after, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rerendered map[string]any
+	if err := json.Unmarshal(after, &rerendered); err != nil {
+		t.Fatal(err)
+	}
+	back, ok := rerendered["mcpServers"].(map[string]any)["imported"].(map[string]any)
+	if !ok || back["serverUrl"] != "https://example.com/mcp" {
+		t.Fatalf("round-trip should restore serverUrl, got %s", after)
+	}
+}
+
+func TestSyncMCPAntigravityDropsRuntimeSwitches(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("AGENTSYNC_CONFIG_HOME", filepath.Join(dir, "config"))
+	detect := filepath.Join(dir, ".gemini", "config")
+	if err := os.MkdirAll(detect, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(detect, "mcp_config.json")
+	existing := `{"mcpServers":{"s":{"command":"x","disabled":true,"disabledTools":["t"],"oauth":{"clientId":"id","clientSecret":"s"},"authProviderType":"google_credentials"}}}`
+	if err := os.WriteFile(target, []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{
+		Source:    filepath.Join(dir, "AGENTS.md"),
+		MCPSource: filepath.Join(dir, "mcp.json"),
+		MCPTargets: []MCPTarget{{
+			Name:    "antigravity",
+			Path:    target,
+			Detect:  detect,
+			Dialect: "windsurf",
+			Format:  "json",
+			Mode:    "file",
+		}},
+	}
+	if err := os.WriteFile(cfg.Source, []byte("rules\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cfg.MCPSource, []byte(`{"mcpServers":{"s":{"command":"x","env":{"K":"V"}}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatal(err)
+	}
+	entry, ok := root["mcpServers"].(map[string]any)["s"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing server s: %s", data)
+	}
+	env, ok := entry["env"].(map[string]any)
+	if !ok || env["K"] != "V" {
+		t.Fatalf("rewrite should carry canonical env, got %s", data)
+	}
+	for _, k := range []string{"disabled", "disabledTools", "oauth", "authProviderType"} {
+		if _, ok := entry[k]; ok {
+			t.Fatalf("runtime switch %q must not be synced, got %s", k, data)
+		}
 	}
 }
 

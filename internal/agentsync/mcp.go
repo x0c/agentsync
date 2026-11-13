@@ -238,7 +238,7 @@ func syncMCPTarget(target MCPTarget, servers []mcpServer, opts Options, dropped 
 		result.Detail = formatFilteredDetail("mcp config", dropped)
 	}
 	perm := os.FileMode(0o644)
-	if target.Dialect == "pi" {
+	if target.Dialect == "pi" || target.Name == "antigravity" {
 		perm = 0o600
 	}
 	if existingMode != 0 {

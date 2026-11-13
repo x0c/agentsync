@@ -141,7 +141,7 @@ Isolated tests cover selection, explicit modes, policy, preview, native-option p
 - Amp uses the literal dotted user-level key; a project `.amp/settings.json` has a separate approval scope.
 - Goose uses an `extensions` map, not a list or an extra `config:` wrapper from internal Rust structures.
 - iFlow has no implemented MCP target. Any future compatibility work must separately validate its effective settings path.
-- Antigravity reuses the `windsurf` dialect (`serverUrl`, no `type`) for `~/.gemini/config/mcp_config.json`. Legacy `~/.gemini/antigravity*/mcp_config.json` paths are not written. `disabled`, `disabledTools`, `oauth`, and `authProviderType` are not synced.
+- Antigravity reuses the `windsurf` dialect (`serverUrl`, no `type`) for `~/.gemini/config/mcp_config.json`. Legacy `~/.gemini/antigravity*/mcp_config.json` paths are not written. `disabled`, `disabledTools`, `oauth`, and `authProviderType` are not synced. Newly created target files use `0600` (existing files keep their permissions); like the canonical source, the target carries secrets, so do not track `~/.gemini/config/mcp_config.json` in dotfiles repos or Syncthing.
 
 ## Conversion reference
 
