@@ -137,6 +137,15 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 		}
 	}
 	for _, target := range cfg.Targets {
+		if target.Mode == "antigravity" {
+			result, backups, err := syncAntigravityTarget(cfg.Source, target, opts)
+			if err != nil {
+				return report, err
+			}
+			report.Results = append(report.Results, result)
+			report.Backups = append(report.Backups, backups...)
+			continue
+		}
 		result, backup, err := syncTarget(cfg.Source, target, opts)
 		if err != nil {
 			return report, err

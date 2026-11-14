@@ -461,8 +461,8 @@ func TestDefaultGlobalConfigIncludesAntigravity(t *testing.T) {
 	if antigravityTarget == nil {
 		t.Fatalf("missing Antigravity instruction target: %+v", cfg.Targets)
 	}
-	if antigravityTarget.Mode != "link" {
-		t.Fatalf("Antigravity instruction target mode should be link, got %q", antigravityTarget.Mode)
+	if antigravityTarget.Mode != "antigravity" {
+		t.Fatalf("Antigravity instruction target mode should be antigravity, got %q", antigravityTarget.Mode)
 	}
 	if !strings.HasSuffix(antigravityTarget.Detect, filepath.Join(".gemini", "config")) {
 		t.Fatalf("Antigravity instruction Detect should be ~/.gemini/config, got %q", antigravityTarget.Detect)

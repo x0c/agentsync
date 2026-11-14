@@ -29,7 +29,7 @@ This guide covers commands, report states, service setup, validation, and releas
 
 The target list comes from `defaultGlobalConfig()` in `internal/agentsync/paths.go`. Each target is gated by its runtime home directory (`Detect`). An absent directory produces `skipped` without creating files. The [instruction and skill path guide](agent_runtime_global_paths.md) lists implemented targets.
 
-The first apply may report `created`, `merged`, `replaced`, or `linked`. Repeating it should converge installed targets to `ok`. Existing unique instructions are preserved before replacement. Managed copies, including Cursor rules, are derived from the source and are refreshed directly rather than imported back into it.
+The first apply may report `created`, `merged`, `replaced`, or `linked`. Repeating it should converge installed targets to `ok`. Existing unique instructions are preserved before replacement. Managed copies, including Cursor `.mdc` rules and split Antigravity rule files, are derived from the source and are refreshed directly rather than imported back into it.
 
 Global mode translates canonical MCP servers into installed runtimes' formats and injects an English reminder to edit only the canonical configuration. Repository and batch modes do not synchronize global instructions, skills, or MCP. Pi selects native or adapter output as described in the [MCP guide](agent_runtime_mcp_paths.md#pi-earendil-workspi).
 
@@ -143,6 +143,10 @@ Adoption expands and validates the path, backs up the current source, writes the
 A Cursor target reporting `linked` or `ok` proves filesystem synchronization. Settings listing `~/.cursor/rules/AGENTS.mdc` does not prove that a particular Agent session loaded its body. Historical reports describe missing injection in Agents Window or home-directory workspaces, and skills can still load through a separate discovery path.
 
 Open a concrete project workspace and start a fresh session. Ask it to quote a distinctive heading from the canonical instructions. If necessary, use Cursor's User Rules text setting or explicitly reference the `.mdc` file in chat. Verify the session's actual content rather than relying on the Settings list. See the [path guide](agent_runtime_global_paths.md#loading-and-confidence-limits) for scope and sources; these are compatibility observations, not a promise about every Cursor version.
+
+## Antigravity 24 KB rule limit and auto-splitting
+
+Antigravity truncates any single global or workspace rule file above `24,000` UTF-8 bytes. When `~/.config/agentsync/AGENTS.md` fits within `22,000` bytes, `~/.gemini/AGENTS.md` uses a direct alias (`link`). Once it exceeds `22,000` bytes, `agentsync` keeps `~/.config/agentsync/AGENTS.md` intact and writes `<= 22,000`-byte managed chunks: plain Markdown `~/.gemini/AGENTS.md` (with no YAML frontmatter) plus `~/.gemini/config/rules/agentsync-part-02.md` ... with `trigger: always_on` frontmatter, backing up and removing leftover part files when the canonical file shrinks. Because Antigravity also shares `~/.gemini`, Gemini CLI targets (`~/.gemini/GEMINI.md`, `~/.gemini/settings.json`) are skipped on Antigravity-only hosts that lack Gemini-CLI-specific markers.
 
 ## Installation
 

@@ -81,7 +81,7 @@ agentsync
 
 - 默认管理**本机的全局配置**；项目文件走独立的仓库模式。
 - 各工具支持的能力不同，详见 [规则与 Skill 支持](docs/agent_runtime_global_paths.md) 和 [MCP 支持](docs/agent_runtime_mcp_paths.md)。
-- 规则与 Skill 尽量使用链接；Cursor 会生成由 `agentsync` 托管的 `.mdc` 规则文件，Windows 下 Skill 目录优先建符号链接，其次用 NTFS 目录联接（junction），否则报错并提示开启 Windows 开发者模式。另见 [Cursor 规则加载限制](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt)。
+- 规则与 Skill 尽量使用链接；Cursor 会生成由 `agentsync` 托管的 `.mdc` 规则文件；Antigravity 在主规则不超过 `22,000` 字节时保持符号链接，超过后会自动按结构切分为受托管的 `~/.gemini/AGENTS.md` 与 `~/.gemini/config/rules/agentsync-part-*.md`（带 `trigger: always_on`），以避开 Antigravity 单文件 `24,000` 字节截断上限；Windows 下 Skill 目录优先建符号链接，其次用 NTFS 目录联接（junction），否则报错并提示开启 Windows 开发者模式。另见 [Cursor 规则加载限制](docs/AGENTSYNC_GUIDE.md#cursor-rules-visible-in-settings-but-absent-from-the-prompt)。
 - 可用 canonical 目录旁的 `sync-policy.json` 按工具过滤服务器、Skill 或规则，详见 [过滤配置](docs/AGENTSYNC_GUIDE.md#global-synchronization)。过滤不会删除源文件中的内容。
 - 请修改共享目录中的源文件。自动同步只向各工具写入，不会导入工具设置界面的改动。`mcp.json` 可能含令牌与本机路径，请保留在本机。仅当配置目录已经是 Git 仓库（含 `.git`）或 Syncthing 文件夹（含 `.stfolder`）时，才会写入保护 `mcp.json` 的 `.gitignore` / `.stignore` 条目。
 - 安全检查会拒绝不支持的参数、无效 MCP 条目和不安全的 Skill 目录重叠。生成副本前先合入用户自写的个性化规则；同名的 Codex 服务器保留各自的本地限制与认证配置。回滚机制采用防冲突的独立备份快照，且 `--rollback latest` 会自动跳过无文件变更的空记录。详见 [内容保留边界](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。

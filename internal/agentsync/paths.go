@@ -16,6 +16,11 @@ func defaultGlobalConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	geminiHome, err := expandPath("~/.gemini")
+	if err != nil {
+		return Config{}, err
+	}
+	geminiDetect := geminiCLIDetectPath(geminiHome, source)
 	// Detect uses each runtime home directory; create instruction and skill aliases
 	// only when that directory already exists. Absent runtimes leave no files behind.
 	targets := []Target{
@@ -23,8 +28,8 @@ func defaultGlobalConfig() (Config, error) {
 		{Path: "~/.codex/AGENTS.md", Mode: "link", Detect: "~/.codex"},
 		{Path: "~/.config/opencode/AGENTS.md", Mode: "link", Detect: "~/.config/opencode"},
 		{Path: "~/.claude/CLAUDE.md", Mode: "claude", Detect: "~/.claude"},
-		{Path: "~/.gemini/GEMINI.md", Mode: "link", Detect: "~/.gemini"},
-		{Path: "~/.gemini/AGENTS.md", Mode: "link", Detect: "~/.gemini/config"},
+		{Path: "~/.gemini/GEMINI.md", Mode: "link", Detect: geminiDetect},
+		{Path: "~/.gemini/AGENTS.md", Mode: "antigravity", Detect: "~/.gemini/config"},
 		{Path: "~/.qwen/QWEN.md", Mode: "link", Detect: "~/.qwen"},
 		{Path: "~/.copilot/copilot-instructions.md", Mode: "link", Detect: "~/.copilot"},
 		{Path: "~/.kimi-code/AGENTS.md", Mode: "link", Detect: "~/.kimi-code"},
@@ -116,7 +121,7 @@ func defaultGlobalConfig() (Config, error) {
 		{Name: "codex", Path: "~/.codex/config.toml", Detect: "~/.codex", Dialect: "codex", Format: "toml", Mode: "key"},
 		{Name: "claude", Path: "~/.claude.json", Detect: "~/.claude", Dialect: "claude", Format: "json", Mode: "key"},
 		{Name: "opencode", Path: "~/.config/opencode/opencode.json", Detect: "~/.config/opencode", Dialect: "opencode", Format: "json", Mode: "key"},
-		{Name: "gemini", Path: "~/.gemini/settings.json", Detect: "~/.gemini", Dialect: "gemini", Format: "json", Mode: "key"},
+		{Name: "gemini", Path: "~/.gemini/settings.json", Detect: geminiDetect, Dialect: "gemini", Format: "json", Mode: "key"},
 		{Name: "qwen", Path: "~/.qwen/settings.json", Detect: "~/.qwen", Dialect: "gemini", Format: "json", Mode: "key"},
 		{Name: "antigravity", Path: "~/.gemini/config/mcp_config.json", Detect: "~/.gemini/config", Dialect: "windsurf", Format: "json", Mode: "file"},
 		{Name: "copilot", Path: "~/.copilot/mcp-config.json", Detect: "~/.copilot", Dialect: "cursor", Format: "json", Mode: "file"},
