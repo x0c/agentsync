@@ -6,6 +6,26 @@ next version's section. A `Release: minor` or `Release: major` line requests a
 larger version step; `Release: hold <reason>` keeps the changes unreleased until
 the named acceptance is done.
 
+## 1.2.0
+
+### English
+
+- Add Antigravity (App, IDE and CLI) as a supported target: instructions at `~/.gemini/AGENTS.md`, skills at `~/.gemini/config/skills` (App/IDE) and `~/.gemini/antigravity-cli/skills` (CLI), and MCP servers at `~/.gemini/config/mcp_config.json` using the `serverUrl` dialect, created with `0600` permissions.
+- Split a canonical `AGENTS.md` larger than 22,000 bytes into managed parts so Antigravity never truncates it: `~/.gemini/AGENTS.md` (no frontmatter) plus `~/.gemini/config/rules/agentsync-part-NN.md` with `trigger: always_on`. Chunks break at structural boundaries, stay at or below 22,000 bytes each, and leftover part files are backed up and pruned when the source shrinks; a source at or below 22,000 bytes stays a direct alias.
+- Gate Gemini CLI targets on Gemini-specific markers when `~/.gemini` also contains Antigravity data, so an Antigravity-only machine gets no `~/.gemini/GEMINI.md` or `~/.gemini/settings.json` and no duplicate instruction loading.
+- Accept `AGENTSYNC_VERSION=latest` in `install.ps1`, matching `install.sh`.
+- Make the `Installers` workflow install the Homebrew cask on Linux (using Homebrew's Linux prefix when it is not on `PATH`) and fail instead of skipping when Homebrew is missing; the repository check no longer treats `/home/linuxbrew` as a personal home path.
+- Document the Antigravity rule limit and split behavior, the Windows hardlink re-import defect and the Windows acceptance procedure, and verified Linux Homebrew support.
+
+### 简体中文
+
+- 新增 Antigravity（App、IDE 与 CLI）支持：规则写入 `~/.gemini/AGENTS.md`，Skill 写入 `~/.gemini/config/skills`（App/IDE）与 `~/.gemini/antigravity-cli/skills`（CLI），MCP 服务器写入 `~/.gemini/config/mcp_config.json`（`serverUrl` 方言，新建文件权限 `0600`）。
+- canonical `AGENTS.md` 超过 22,000 字节时自动切分，避免 Antigravity 截断：生成不带 frontmatter 的 `~/.gemini/AGENTS.md`，以及带 `trigger: always_on` 的 `~/.gemini/config/rules/agentsync-part-NN.md`。切分点落在结构边界，每片不超过 22,000 字节；源文件变短时旧分片会被备份并清理；源文件不超过 22,000 字节时仍保持直接链接。
+- 当 `~/.gemini` 同时存在 Antigravity 数据时，Gemini CLI 目标改为按 Gemini 专有标记判断，仅使用 Antigravity 的机器不再生成 `~/.gemini/GEMINI.md` 或 `~/.gemini/settings.json`，也不会重复加载规则。
+- `install.ps1` 支持 `AGENTSYNC_VERSION=latest`，与 `install.sh` 一致。
+- `Installers` 工作流在 Linux 上真正安装 Homebrew cask（Homebrew 不在 `PATH` 时使用其 Linux 安装前缀），缺少 Homebrew 时报错而不是跳过；仓库检查不再把 `/home/linuxbrew` 当作个人主目录路径。
+- 补充文档：Antigravity 规则上限与切分方式、Windows 硬链接重新导入缺陷与 Windows 验收流程，以及已验证的 Linux Homebrew 支持。
+
 ## 1.1.0
 
 ### English
