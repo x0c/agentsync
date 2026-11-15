@@ -173,10 +173,14 @@ func TestSyncMCPAntigravityRendersServerUrl(t *testing.T) {
 	if _, hasType := local["type"]; hasType {
 		t.Fatalf("antigravity entries should omit type, got %s", data)
 	}
-	if fi, err := os.Stat(target); err != nil {
-		t.Fatal(err)
-	} else if fi.Mode().Perm() != 0o600 {
-		t.Fatalf("new antigravity target should be 0600, got %o", fi.Mode().Perm())
+	// Windows ignores POSIX permission bits and reports a synthetic 0666 for new
+	// files, so the 0600 assertion applies only where the mode is honored.
+	if runtime.GOOS != "windows" {
+		if fi, err := os.Stat(target); err != nil {
+			t.Fatal(err)
+		} else if fi.Mode().Perm() != 0o600 {
+			t.Fatalf("new antigravity target should be 0600, got %o", fi.Mode().Perm())
+		}
 	}
 	report, err := syncConfig(cfg, Options{})
 	if err != nil {
