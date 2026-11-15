@@ -6,7 +6,9 @@ next version's section. A `Release: minor` or `Release: major` line requests a
 larger version step; `Release: hold <reason>` keeps the changes unreleased until
 the named acceptance is done.
 
-## 1.2.0
+## 1.2.1
+
+These notes ship the Antigravity work first tagged `v1.2.0`, which was never published: that tag's release run failed the Windows test fixed below.
 
 ### English
 
@@ -16,8 +18,11 @@ the named acceptance is done.
 - Accept `AGENTSYNC_VERSION=latest` in `install.ps1`, matching `install.sh`.
 - Make the `Installers` workflow install the Homebrew cask on Linux (using Homebrew's Linux prefix when it is not on `PATH`) and fail instead of skipping when Homebrew is missing; the repository check no longer treats `/home/linuxbrew` as a personal home path.
 - Document the Antigravity rule limit and split behavior, the Windows hardlink re-import defect and the Windows acceptance procedure, and verified Linux Homebrew support.
+- Fix the Windows-only failure in the Antigravity MCP test: the `0600` new-file assertion now runs only on platforms that honor POSIX permission bits, matching the other MCP permission tests. Product behavior is unchanged; Windows ignores those bits and reports a synthetic `0666`.
 
 ### 简体中文
+
+本次发布包含先以 `v1.2.0` 打标签、但从未发布的 Antigravity 功能：该标签的发布流程被下面修复的 Windows 测试拦住。
 
 - 新增 Antigravity（App、IDE 与 CLI）支持：规则写入 `~/.gemini/AGENTS.md`，Skill 写入 `~/.gemini/config/skills`（App/IDE）与 `~/.gemini/antigravity-cli/skills`（CLI），MCP 服务器写入 `~/.gemini/config/mcp_config.json`（`serverUrl` 方言，新建文件权限 `0600`）。
 - canonical `AGENTS.md` 超过 22,000 字节时自动切分，避免 Antigravity 截断：生成不带 frontmatter 的 `~/.gemini/AGENTS.md`，以及带 `trigger: always_on` 的 `~/.gemini/config/rules/agentsync-part-NN.md`。切分点落在结构边界，每片不超过 22,000 字节；源文件变短时旧分片会被备份并清理；源文件不超过 22,000 字节时仍保持直接链接。
@@ -25,6 +30,7 @@ the named acceptance is done.
 - `install.ps1` 支持 `AGENTSYNC_VERSION=latest`，与 `install.sh` 一致。
 - `Installers` 工作流在 Linux 上真正安装 Homebrew cask（Homebrew 不在 `PATH` 时使用其 Linux 安装前缀），缺少 Homebrew 时报错而不是跳过；仓库检查不再把 `/home/linuxbrew` 当作个人主目录路径。
 - 补充文档：Antigravity 规则上限与切分方式、Windows 硬链接重新导入缺陷与 Windows 验收流程，以及已验证的 Linux Homebrew 支持。
+- 修复 Antigravity MCP 测试在 Windows 上的失败：`0600` 新建文件断言改为只在支持 POSIX 权限位的平台上运行，与其他 MCP 权限测试一致。产品行为不变；Windows 忽略这些权限位，会返回合成的 `0666`。
 
 ## 1.1.0
 
