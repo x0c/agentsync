@@ -25,36 +25,36 @@ func defaultGlobalConfig() (Config, error) {
 	// only when that directory already exists. Absent runtimes leave no files behind.
 	targets := []Target{
 		// Major CLI agents
-		{Path: "~/.codex/AGENTS.md", Mode: "link", Detect: "~/.codex"},
-		{Path: "~/.config/opencode/AGENTS.md", Mode: "link", Detect: "~/.config/opencode"},
-		{Path: "~/.claude/CLAUDE.md", Mode: "claude", Detect: "~/.claude"},
-		{Path: "~/.gemini/GEMINI.md", Mode: "link", Detect: geminiDetect},
-		{Path: "~/.gemini/AGENTS.md", Mode: "antigravity", Detect: "~/.gemini/config"},
-		{Path: "~/.qwen/QWEN.md", Mode: "link", Detect: "~/.qwen"},
-		{Path: "~/.copilot/copilot-instructions.md", Mode: "link", Detect: "~/.copilot"},
-		{Path: "~/.kimi-code/AGENTS.md", Mode: "link", Detect: "~/.kimi-code"},
+		{Name: "codex", Path: "~/.codex/AGENTS.md", Mode: "link", Detect: "~/.codex"},
+		{Name: "opencode", Path: "~/.config/opencode/AGENTS.md", Mode: "link", Detect: "~/.config/opencode"},
+		{Name: "claude", Path: "~/.claude/CLAUDE.md", Mode: "claude", Detect: "~/.claude"},
+		{Name: "gemini", Path: "~/.gemini/GEMINI.md", Mode: "link", Detect: geminiDetect},
+		{Name: "antigravity", Path: "~/.gemini/AGENTS.md", Mode: "antigravity", Detect: "~/.gemini/config"},
+		{Name: "qwen", Path: "~/.qwen/QWEN.md", Mode: "link", Detect: "~/.qwen"},
+		{Name: "copilot", Path: "~/.copilot/copilot-instructions.md", Mode: "link", Detect: "~/.copilot"},
+		{Name: "kimi-code", Path: "~/.kimi-code/AGENTS.md", Mode: "link", Detect: "~/.kimi-code"},
 		// Open-source and independent CLI agents
-		{Path: "~/.grok/AGENTS.md", Mode: "link", Detect: "~/.grok"},
-		{Path: "~/.config/amp/AGENTS.md", Mode: "link", Detect: "~/.config/amp"},
-		{Path: "~/.config/crush/CRUSH.md", Mode: "link", Detect: "~/.config/crush"},
-		{Path: "~/.config/goose/AGENTS.md", Mode: "link", Detect: "~/.config/goose"},
-		{Path: "~/.factory/AGENTS.md", Mode: "link", Detect: "~/.factory"},
-		{Path: "~/.iflow/IFLOW.md", Mode: "link", Detect: "~/.iflow"},
-		{Path: "~/.config/kilo/AGENTS.md", Mode: "link", Detect: "~/.config/kilo"},
-		{Path: filepath.Join(piAgentDir(), "AGENTS.md"), Mode: "link", Detect: piAgentDir()},
-		{Path: "~/.dsh/AGENTS.md", Mode: "link", Detect: "~/.dsh"},
+		{Name: "grok", Path: "~/.grok/AGENTS.md", Mode: "link", Detect: "~/.grok"},
+		{Name: "amp", Path: "~/.config/amp/AGENTS.md", Mode: "link", Detect: "~/.config/amp"},
+		{Name: "crush", Path: "~/.config/crush/CRUSH.md", Mode: "link", Detect: "~/.config/crush"},
+		{Name: "goose", Path: "~/.config/goose/AGENTS.md", Mode: "link", Detect: "~/.config/goose"},
+		{Name: "factory", Path: "~/.factory/AGENTS.md", Mode: "link", Detect: "~/.factory"},
+		{Name: "iflow", Path: "~/.iflow/IFLOW.md", Mode: "link", Detect: "~/.iflow"},
+		{Name: "kilo", Path: "~/.config/kilo/AGENTS.md", Mode: "link", Detect: "~/.config/kilo"},
+		{Name: "pi", Path: filepath.Join(piAgentDir(), "AGENTS.md"), Mode: "link", Detect: piAgentDir()},
+		{Name: "dsh", Path: "~/.dsh/AGENTS.md", Mode: "link", Detect: "~/.dsh"},
 		// IDE and editor agents
-		{Path: "~/.cursor/rules/AGENTS.mdc", Mode: "cursor", Detect: "~/.cursor"},
-		{Path: "~/.codeium/windsurf/memories/global_rules.md", Mode: "link", Detect: "~/.codeium/windsurf"},
-		{Path: "~/.config/zed/AGENTS.md", Mode: "link", Detect: "~/.config/zed"},
+		{Name: "cursor", Path: "~/.cursor/rules/AGENTS.mdc", Mode: "cursor", Detect: "~/.cursor"},
+		{Name: "windsurf", Path: "~/.codeium/windsurf/memories/global_rules.md", Mode: "link", Detect: "~/.codeium/windsurf"},
+		{Name: "zed", Path: "~/.config/zed/AGENTS.md", Mode: "link", Detect: "~/.config/zed"},
 		// Vendor-specific agents
-		{Path: "~/.codebuddy/CODEBUDDY.md", Mode: "link", Detect: "~/.codebuddy"},
-		{Path: "~/.qoder/AGENTS.md", Mode: "link", Detect: "~/.qoder"},
-		{Path: "~/.junie/AGENTS.md", Mode: "link", Detect: "~/.junie"},
-		{Path: "~/.kiro/steering/AGENTS.md", Mode: "link", Detect: "~/.kiro"},
-		{Path: "~/.joycode/AGENTS.md", Mode: "link", Detect: "~/.joycode"},
+		{Name: "codebuddy", Path: "~/.codebuddy/CODEBUDDY.md", Mode: "link", Detect: "~/.codebuddy"},
+		{Name: "qoder", Path: "~/.qoder/AGENTS.md", Mode: "link", Detect: "~/.qoder"},
+		{Name: "junie", Path: "~/.junie/AGENTS.md", Mode: "link", Detect: "~/.junie"},
+		{Name: "kiro", Path: "~/.kiro/steering/AGENTS.md", Mode: "link", Detect: "~/.kiro"},
+		{Name: "joycode", Path: "~/.joycode/AGENTS.md", Mode: "link", Detect: "~/.joycode"},
 		// Shared ~/.agents entry, synchronized only when it already exists
-		{Path: "~/.agents/AGENTS.md", Mode: "link", Detect: "~/.agents"},
+		{Name: "agents", Path: "~/.agents/AGENTS.md", Mode: "link", Detect: "~/.agents"},
 	}
 	skillTargets := []SkillTarget{
 		// Major CLI agents
@@ -166,6 +166,8 @@ func defaultGlobalConfig() (Config, error) {
 		MCPSource:    mcpSource,
 		MCPTargets:   mcpTargets,
 		PolicyPath:   policyPath,
+		// Overlays live beside the canonical source and apply to global runs only.
+		InstructionOverlayDir: filepath.Join(filepath.Dir(source), "instructions"),
 	}, nil
 }
 
@@ -173,7 +175,7 @@ func repoConfig(root string) Config {
 	return Config{
 		Source: filepath.Join(root, "AGENTS.md"),
 		Targets: []Target{
-			{Path: filepath.Join(root, "CLAUDE.md"), Mode: "relative-link"},
+			{Name: "project", Path: filepath.Join(root, "CLAUDE.md"), Mode: "relative-link"},
 		},
 	}
 }

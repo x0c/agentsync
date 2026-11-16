@@ -28,6 +28,8 @@ type watchSnapshot struct {
 	Policy string
 	Detect string
 	Pi     string
+	// Instructions fingerprints the optional per-runtime overlay directory.
+	Instructions string
 }
 
 func (a watchSnapshot) equal(b watchSnapshot) bool {
@@ -176,6 +178,10 @@ func watchSnapshotOf(cfg Config) (watchSnapshot, error) {
 		return watchSnapshot{}, err
 	}
 	snap.Policy, err = pathFingerprint(cfg.PolicyPath)
+	if err != nil {
+		return watchSnapshot{}, err
+	}
+	snap.Instructions, err = skillsFingerprint(cfg.InstructionOverlayDir)
 	if err != nil {
 		return watchSnapshot{}, err
 	}

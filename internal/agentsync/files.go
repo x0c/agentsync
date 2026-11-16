@@ -1,6 +1,7 @@
 package agentsync
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -90,43 +92,120 @@ func writeManagedCopy(source, target string) error {
 	if err != nil {
 		return err
 	}
-	sum := sha256.Sum256(data)
-	body := fmt.Sprintf("<!-- managed-by: agentsync source=%q sha256=%s -->\n", source, hex.EncodeToString(sum[:]))
-	body += string(data)
+	return writeManagedCopyBytes(source, target, data, "")
+}
+
+// managedCopyBody prefixes payload with the generated-file marker. The hash
+// covers the exact bytes written after the marker, so editing either the source
+// or a runtime overlay invalidates the copy.
+func managedCopyBody(source string, payload []byte, overlay string) []byte {
+	sum := sha256.Sum256(payload)
+	var b strings.Builder
+	switch overlay {
+	case "":
+		fmt.Fprintf(&b, "%ssource=%q sha256=%s -->\n", managedMarkerPrefix, source, hex.EncodeToString(sum[:]))
+	default:
+		fmt.Fprintf(&b, "%ssource=%q sha256=%s %s%q -->\n", managedMarkerPrefix, source, hex.EncodeToString(sum[:]), overlayMarkerAttr, overlay)
+	}
+	b.Write(payload)
+	return []byte(b.String())
+}
+
+func writeManagedCopyBytes(source, target string, payload []byte, overlay string) error {
 	if err := ensureParent(target); err != nil {
 		return err
 	}
-	return os.WriteFile(target, []byte(body), 0o644)
+	return os.WriteFile(target, managedCopyBody(source, payload, overlay), 0o644)
 }
 
-func writeCursorRule(source, target string) error {
-	data, err := os.ReadFile(source)
-	if err != nil {
+func writeCursorRuleBytes(source, target string, payload []byte, overlay string) error {
+	if err := ensureParent(target); err != nil {
 		return err
 	}
-	sum := sha256.Sum256(data)
+	return os.WriteFile(target, cursorRuleBody(source, payload, overlay), 0o644)
+}
+
+// cursorRuleBody adds the alwaysApply frontmatter Cursor requires, then the
+// generated-file marker and the instruction body.
+func cursorRuleBody(source string, payload []byte, overlay string) []byte {
 	var b strings.Builder
 	b.WriteString(cursorFrontmatter)
-	if _, err := fmt.Fprintf(&b, "<!-- managed-by: agentsync source=%q sha256=%s -->\n", source, hex.EncodeToString(sum[:])); err != nil {
-		return err
-	}
-	b.Write(data)
-	if err := ensureParent(target); err != nil {
-		return err
-	}
-	return os.WriteFile(target, []byte(b.String()), 0o644)
+	b.Write(managedCopyBody(source, payload, overlay))
+	return []byte(b.String())
 }
 
-func createAlias(source, target, mode string) (string, error) {
+// samePayload reports whether an existing target already holds payload after
+// stripping generated headers and Cursor frontmatter.
+func samePayload(path string, payload []byte) bool {
+	got, err := readPayload(path)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(got, payload)
+}
+
+// managedCopyOverlay returns the runtime recorded in a generated copy's marker,
+// or the empty string for a copy rendered from the source alone. It separates a
+// copy created for an overlay, which must revert to a symlink once the overlay
+// disappears, from a copy that is the platform's link fallback.
+func managedCopyOverlay(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	s := string(data)
+	if strings.HasPrefix(s, "---\n") {
+		if body, ok := stripYAMLFrontmatter(s); ok {
+			s = body
+		}
+	}
+	if !strings.HasPrefix(s, managedMarkerPrefix) {
+		return ""
+	}
+	line, _, _ := strings.Cut(s, "\n")
+	idx := strings.Index(line, overlayMarkerAttr)
+	if idx < 0 {
+		return ""
+	}
+	quoted := line[idx+len(overlayMarkerAttr):]
+	if len(quoted) == 0 || quoted[0] != '"' {
+		return ""
+	}
+	for end := 1; end < len(quoted); end++ {
+		if quoted[end] != '"' {
+			continue
+		}
+		value, err := strconv.Unquote(quoted[:end+1])
+		if err != nil {
+			return ""
+		}
+		return value
+	}
+	return ""
+}
+
+func createAlias(source, target, mode string, render instructionRender) (string, error) {
 	if err := ensureParent(target); err != nil {
 		return "", err
 	}
 	// Cursor global rules require alwaysApply frontmatter rather than a bare AGENTS.md symlink.
 	if mode == "cursor" {
-		if err := writeCursorRule(source, target); err != nil {
+		if err := writeRenderedCursorRule(source, target, render); err != nil {
 			return "", err
 		}
 		return "cursor-rule", nil
+	}
+	// A runtime overlay cannot live behind a symlink, so the merged body is
+	// written as a managed copy that the next run can refresh idempotently.
+	if render.active() {
+		payload, err := render.body(source)
+		if err != nil {
+			return "", err
+		}
+		if err := writeManagedCopyBytes(source, target, payload, render.Runtime); err != nil {
+			return "", err
+		}
+		return "managed-copy", nil
 	}
 	// Directory aliases (skill roots) never fall back to a static copy:
 	// on Windows try a symlink, then an NTFS junction, then fail with
@@ -136,6 +215,14 @@ func createAlias(source, target, mode string) (string, error) {
 		return createDirAlias(source, target, mode)
 	}
 	return createFileAlias(source, target, mode)
+}
+
+func writeRenderedCursorRule(source, target string, render instructionRender) error {
+	payload, err := render.body(source)
+	if err != nil {
+		return err
+	}
+	return writeCursorRuleBytes(source, target, payload, render.Runtime)
 }
 
 // createDirAlias links a directory source. Junctions apply only on Windows

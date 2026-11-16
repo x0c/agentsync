@@ -91,7 +91,8 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 	if !pathExists(cfg.Source) {
 		var existing []string
 		for _, t := range cfg.Targets {
-			if p := readableContentPath(t.Path); p != "" {
+			// Generated copies are derived, never a source of instruction text.
+			if p := readableContentPath(t.Path); p != "" && !isManagedAgentsyncFile(p) {
 				existing = append(existing, p)
 			}
 		}
@@ -136,9 +137,16 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 			}
 		}
 	}
+	// Runtime fragments extend the final source, so load them after imports.
+	overlays, overlayWarnings, err := loadInstructionOverlays(cfg.InstructionOverlayDir, cfg.Targets)
+	if err != nil {
+		return report, err
+	}
+	report.Results = append(report.Results, overlayWarnings...)
 	for _, target := range cfg.Targets {
+		render := newInstructionRender(target, overlays)
 		if target.Mode == "antigravity" {
-			result, backups, err := syncAntigravityTarget(cfg.Source, target, opts)
+			result, backups, err := syncAntigravityTarget(cfg.Source, target, render, opts)
 			if err != nil {
 				return report, err
 			}
@@ -146,13 +154,16 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 			report.Backups = append(report.Backups, backups...)
 			continue
 		}
-		result, backup, err := syncTarget(cfg.Source, target, opts)
+		result, backup, err := syncTarget(cfg.Source, target, render, opts)
 		if err != nil {
 			return report, err
 		}
 		report.Results = append(report.Results, result)
 		if backup != "" {
 			report.Backups = append(report.Backups, backup)
+		}
+		if warning := windsurfLimitWarning(cfg.Source, target, render, result.Status); warning != nil {
+			report.Results = append(report.Results, *warning)
 		}
 	}
 	skillResults, skillBackups, err := syncSkills(cfg, opts)
@@ -207,7 +218,7 @@ func importInstructionTarget(source string, target Target) (bool, error) {
 	return appendImportedContent(source, origin)
 }
 
-func syncTarget(source string, target Target, opts Options) (TargetResult, string, error) {
+func syncTarget(source string, target Target, render instructionRender, opts Options) (TargetResult, string, error) {
 	result := TargetResult{Path: target.Path}
 	// Skip absent runtimes without creating directories or files.
 	if target.Detect != "" && !pathExists(target.Detect) {
@@ -219,14 +230,17 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		if opts.Check {
 			result.Status = "missing"
 			result.Detail = "would create alias"
+			if render.active() {
+				result.Detail = fmt.Sprintf("would create a managed copy with the %s overlay", render.Runtime)
+			}
 			return result, "", nil
 		}
-		kind, err := createAlias(source, target.Path, target.Mode)
+		kind, err := createAlias(source, target.Path, target.Mode, render)
 		if err != nil {
 			return result, "", err
 		}
 		result.Status = "linked"
-		result.Detail = kind
+		result.Detail = aliasDetail(kind, render)
 		return result, "", nil
 	}
 
@@ -235,11 +249,12 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		return result, "", err
 	}
 	if isManagedLink(info) {
-		// Cursor mode requires a managed file with frontmatter, not a bare source symlink.
-		if target.Mode == "cursor" {
+		// Cursor mode and runtime overlays require a managed file, not a bare
+		// source symlink, so the link is replaced after its content is imported.
+		if target.Mode == "cursor" || render.active() {
 			if opts.Check {
 				result.Status = "wrong-link"
-				result.Detail = "would preserve unmanaged content and replace symlink with cursor-rule"
+				result.Detail = "would preserve unmanaged content and replace symlink with " + derivedKind(target, render)
 				return result, "", nil
 			}
 			if !opts.Force {
@@ -254,12 +269,12 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 			if err := removePath(target.Path); err != nil {
 				return result, "", err
 			}
-			kind, err := createAlias(source, target.Path, target.Mode)
+			kind, err := createAlias(source, target.Path, target.Mode, render)
 			if err != nil {
 				return result, "", err
 			}
 			result.Status = "replaced"
-			result.Detail = kind
+			result.Detail = aliasDetail(kind, render)
 			return result, backup, nil
 		}
 		if linkPointsTo(target.Path, source) {
@@ -281,7 +296,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 			if err := removePath(target.Path); err != nil {
 				return result, "", err
 			}
-			kind, err := createAlias(source, target.Path, target.Mode)
+			kind, err := createAlias(source, target.Path, target.Mode, instructionRender{})
 			if err != nil {
 				return result, "", err
 			}
@@ -302,7 +317,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 			if err := removePath(target.Path); err != nil {
 				return result, "", err
 			}
-			kind, err := createAlias(source, target.Path, target.Mode)
+			kind, err := createAlias(source, target.Path, target.Mode, instructionRender{})
 			if err != nil {
 				return result, "", err
 			}
@@ -329,7 +344,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		if err := removePath(target.Path); err != nil {
 			return result, "", err
 		}
-		kind, err := createAlias(source, target.Path, target.Mode)
+		kind, err := createAlias(source, target.Path, target.Mode, instructionRender{})
 		if err != nil {
 			return result, "", err
 		}
@@ -341,6 +356,14 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		result.Status = "blocked"
 		result.Detail = "not a regular file"
 		return result, "", nil
+	}
+	// A runtime overlay always materializes as a managed copy, and its removal
+	// restores the plain alias so the target follows the source again.
+	if render.active() {
+		return syncOverlayCopy(source, target, render, opts, result)
+	}
+	if managedCopyOverlay(target.Path) != "" {
+		return syncOverlayRemoval(source, target, opts, result)
 	}
 	if sameContent(source, target.Path) && (target.Mode != "cursor" || isManagedAgentsyncFile(target.Path)) {
 		if !opts.Force {
@@ -364,7 +387,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		if err := removePath(target.Path); err != nil {
 			return result, "", err
 		}
-		kind, err := createAlias(source, target.Path, target.Mode)
+		kind, err := createAlias(source, target.Path, target.Mode, instructionRender{})
 		if err != nil {
 			return result, "", err
 		}
@@ -394,7 +417,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 		if err := removePath(target.Path); err != nil {
 			return result, "", err
 		}
-		kind, err := createAlias(source, target.Path, target.Mode)
+		kind, err := createAlias(source, target.Path, target.Mode, instructionRender{})
 		if err != nil {
 			return result, "", err
 		}
@@ -418,7 +441,7 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 	if err := removePath(target.Path); err != nil {
 		return result, "", err
 	}
-	kind, err := createAlias(source, target.Path, target.Mode)
+	kind, err := createAlias(source, target.Path, target.Mode, instructionRender{})
 	if err != nil {
 		return result, "", err
 	}
@@ -428,6 +451,122 @@ func syncTarget(source string, target Target, opts Options) (TargetResult, strin
 	} else {
 		result.Detail = "content already present; " + kind
 	}
+	return result, backup, nil
+}
+
+// derivedKind names the generated file that replaces a bare symlink.
+func derivedKind(target Target, render instructionRender) string {
+	if target.Mode == "cursor" {
+		return "cursor-rule"
+	}
+	return fmt.Sprintf("a managed copy plus the %s overlay", render.Runtime)
+}
+
+// aliasDetail labels a created alias or managed copy in the report.
+func aliasDetail(kind string, render instructionRender) string {
+	if render.active() && kind != "cursor-rule" {
+		return fmt.Sprintf("managed copy with the %s overlay", render.Runtime)
+	}
+	return kind
+}
+
+// syncOverlayCopy writes source plus the runtime fragment as a managed copy,
+// preserving unique unmanaged content first. A stale copy is refreshed without
+// importing its body, so old fragments never leak back into the source.
+func syncOverlayCopy(source string, target Target, render instructionRender, opts Options, result TargetResult) (TargetResult, string, error) {
+	payload, err := render.body(source)
+	if err != nil {
+		return result, "", err
+	}
+	detail := fmt.Sprintf("managed copy with the %s overlay", render.Runtime)
+	if target.Mode == "cursor" {
+		detail = fmt.Sprintf("cursor-rule with the %s overlay", render.Runtime)
+	}
+	merged := false
+	if !opts.Force {
+		if isManagedAgentsyncFile(target.Path) {
+			if samePayload(target.Path, payload) {
+				result.Status = "ok"
+				result.Detail = detail
+				return result, "", nil
+			}
+		} else {
+			// A hand-written file may hold instructions the source does not have yet.
+			if opts.Check {
+				if sameContent(source, target.Path) {
+					result.Status = "replaceable"
+					result.Detail = "would replace with " + detail
+				} else {
+					result.Status = "mergeable"
+					result.Detail = "would merge unique content and write " + detail
+				}
+				return result, "", nil
+			}
+			appended, err := appendImportedContent(source, target.Path)
+			if err != nil {
+				return result, "", err
+			}
+			merged = appended
+			if payload, err = render.body(source); err != nil {
+				return result, "", err
+			}
+		}
+	}
+	if opts.Check {
+		result.Status = "replaceable"
+		if isManagedAgentsyncFile(target.Path) {
+			result.Detail = "would refresh " + detail + " from the canonical source"
+		} else {
+			result.Detail = "would replace with " + detail
+		}
+		return result, "", nil
+	}
+	backup, err := backupFile(target.Path)
+	if err != nil {
+		return result, "", err
+	}
+	if err := removePath(target.Path); err != nil {
+		return result, "", err
+	}
+	// Cursor only loads .mdc rules that carry alwaysApply frontmatter.
+	if target.Mode == "cursor" {
+		err = writeCursorRuleBytes(source, target.Path, payload, render.Runtime)
+	} else {
+		err = writeManagedCopyBytes(source, target.Path, payload, render.Runtime)
+	}
+	if err != nil {
+		return result, "", err
+	}
+	result.Status = "replaced"
+	result.Detail = detail
+	if merged {
+		result.Status = "merged"
+		result.Detail = "content appended; " + detail
+	}
+	return result, backup, nil
+}
+
+// syncOverlayRemoval restores the plain alias recorded by an overlay copy once
+// the runtime fragment is gone, so later source edits apply without a rewrite.
+func syncOverlayRemoval(source string, target Target, opts Options, result TargetResult) (TargetResult, string, error) {
+	if opts.Check {
+		result.Status = "replaceable"
+		result.Detail = "would restore alias now that the runtime overlay is gone"
+		return result, "", nil
+	}
+	backup, err := backupFile(target.Path)
+	if err != nil {
+		return result, "", err
+	}
+	if err := removePath(target.Path); err != nil {
+		return result, "", err
+	}
+	kind, err := createAlias(source, target.Path, target.Mode, instructionRender{})
+	if err != nil {
+		return result, "", err
+	}
+	result.Status = "replaced"
+	result.Detail = "restored " + kind + " now that the runtime overlay is gone"
 	return result, backup, nil
 }
 

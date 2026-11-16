@@ -15,6 +15,9 @@ flowchart TD
     Run --> Config[defaultGlobalConfig / repoConfig]
     Config --> Sync[syncConfig]
     Sync --> Instructions[syncTarget]
+    Sync --> Overlays[loadInstructionOverlays]
+    Overlays --> Render[instructionRender]
+    Render --> Instructions
     Sync --> Skills[syncSkills]
     Sync --> MCP[syncMCP]
     Skills --> Policy[loadSyncPolicy]
@@ -40,6 +43,8 @@ When the canonical source is missing, readable runtime entries can initialize it
 Preserve unique user-written content before replacement by importing it; back up replaced entries. Reviewed replacement content can be prepared manually and adopted with `--adopt`; the current synchronization path does not generate merge drafts automatically. Ordinary differing files merge by default. `--force` permits direct replacement after backup and must not become the default.
 
 Files marked `<!-- managed-by: agentsync` are generated copies, including Cursor `.mdc` rules and multi-part Antigravity split rules (`~/.gemini/AGENTS.md` when split plus `~/.gemini/config/rules/agentsync-part-*.md`). If stale or shrunk, replace or prune them from the canonical source; never import their old body back into it. Destination format alone does not establish ownership: preserve unique unmarked Cursor/Antigravity files and linked user content before replacing them. Finish instruction imports before generating any runtime copies, so later targets cannot leave earlier copies stale. `sameContent()` strips managed markers and Cursor frontmatter; Antigravity checks part hashes against canonical chunks. An equivalent ordinary file reports `ok` unless forced.
+
+Per-runtime fragments in `instructions/<runtime>.md` extend the source after imports. `loadInstructionOverlays()` maps each case-insensitive runtime key to one fragment, warns about unknown names, rejects duplicate keys, and treats a blank fragment as absent. `instructionRender` appends the fragment under `<!-- agentsync:begin overlay target="..." -->` / `<!-- agentsync:end overlay -->` markers, and the managed header records `overlay="<runtime>"` plus a SHA-256 hash of the rendered body, so changing either input refreshes the copy. A target with a fragment is never a symlink; its copy is compared with `samePayload()` and refreshed without importing its body. When the fragment disappears, only a copy carrying that `overlay=` marker is restored to a plain alias, which leaves Windows link-fallback copies and legacy managed copies alone. Repository and batch modes leave `InstructionOverlayDir` empty, so global fragments never reach project files. Fragment size limits belong to the runtime: Windsurf's 6,000-character `memories/global_rules.md` cap produces a `warning`, and Antigravity still splits merged bodies above `22,000` bytes.
 
 File alias fallback order is symlink, Windows hardlink, then managed copy. Directory aliases (skill roots) never fall back to a static copy: on Windows they try a symbolic link, then an NTFS directory junction, then fail with Developer Mode guidance; off Windows a symlink failure for a directory is returned directly. Global links use absolute resolved paths.
 
@@ -90,7 +95,7 @@ A missing policy preserves the unfiltered behavior. Reject target keys that coll
 
 ## Watch
 
-The watcher tracks canonical sources, policy, runtime presence, and Pi selection. Do not monitor runtime output files such as `~/.claude.json`: that creates write loops. Runtime-side MCP edits are not automatically imported.
+The watcher tracks canonical sources, policy, runtime presence, Pi selection, and the per-runtime fragment directory. Do not monitor runtime output files such as `~/.claude.json`: that creates write loops. Runtime-side MCP edits are not automatically imported.
 
 Instruction/skill-only changes with an unchanged policy set internal `Options.SkipMCP`. Policy changes must update both skills and MCP. `SkipMCP` is not a public CLI flag.
 
@@ -110,6 +115,7 @@ Rollback supports read-only preview, backs up current entries according to their
 |---|---|
 | `main.go`, `types.go` | Flags, options, configuration, and report types |
 | `run.go` | Dispatch, instruction state machine, batch scanning, reports |
+| `instructions.go` | Per-runtime fragment loading, overlay rendering, runtime size warnings |
 | `paths.go` | Canonical sources, runtime targets, repository configuration, path expansion |
 | `files.go` | Aliases, managed copies, payload comparison, file/directory preservation |
 | `antigravity.go` | Structural rule splitting (`>22,000` B) across `~/.gemini/AGENTS.md` and `~/.gemini/config/rules/agentsync-part-*.md` |

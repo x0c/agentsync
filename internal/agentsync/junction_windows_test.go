@@ -76,7 +76,7 @@ func TestWindowsSkillRootFallsBackToJunctionWhenSymlinkDenied(t *testing.T) {
 	}
 	target := filepath.Join(dir, "runtime", "skills")
 
-	kind, err := createAlias(source, target, "link")
+	kind, err := createAlias(source, target, "link", instructionRender{})
 	if err != nil {
 		t.Fatalf("junction fallback failed: %v", err)
 	}

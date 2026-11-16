@@ -26,6 +26,7 @@ This guide covers commands, report states, service setup, validation, and releas
 | `~/.config/agentsync/skills/` | Complete skill directories |
 | `~/.config/agentsync/mcp.json` | Machine-local MCP server definitions; may contain tokens |
 | `~/.config/agentsync/sync-policy.json` | Optional per-runtime allow/deny policy; contains no tokens |
+| `~/.config/agentsync/instructions/` | Optional per-runtime instruction fragments such as `pi.md` |
 
 The target list comes from `defaultGlobalConfig()` in `internal/agentsync/paths.go`. Each target is gated by its runtime home directory (`Detect`). An absent directory produces `skipped` without creating files. The [instruction and skill path guide](agent_runtime_global_paths.md) lists implemented targets.
 
@@ -49,6 +50,37 @@ For example, exclude a server from Codex while keeping it available to other run
 
 Save the policy beside the canonical sources, then apply or let the watcher handle it. The report identifies filtered servers. Filtering never removes content from the canonical source.
 
+## Per-tool instruction fragments
+
+The canonical `AGENTS.md` stays shared. To give one installed tool extra rules, add `instructions/<runtime>.md` beside it and write normal Markdown:
+
+```text
+~/.config/agentsync/
+├── AGENTS.md
+└── instructions/
+    └── pi.md      # appended only for Pi
+```
+
+The file name is the runtime key used elsewhere in agentsync: `pi`, `codex`, `claude`, `cursor`, `antigravity`, `windsurf`, `kimi-code`, `agents`, and so on. Matching is case-insensitive; `instructions/PI.md` and `instructions/pi.md` are rejected as one runtime defined twice. Non-Markdown files, hidden files, and Syncthing conflict copies are ignored. A missing, unreadable, or blank fragment counts as absent.
+
+A runtime with a fragment receives a managed copy of `AGENTS.md` plus the fragment instead of a symlink, because a symlink cannot hold a per-tool difference:
+
+```markdown
+<canonical AGENTS.md>
+
+<!-- agentsync:begin overlay target="pi" -->
+<instructions/pi.md>
+<!-- agentsync:end overlay -->
+```
+
+The generated header records `overlay="pi"` and a SHA-256 hash of the rendered body, so editing either file refreshes the copy on the next run. Removing or blanking the fragment backs up the copy and restores the link, so later source edits apply again without a rewrite. Tools without a fragment keep their links.
+
+Runtime-specific formats still apply: Cursor adds its `alwaysApply: true` frontmatter, a standalone `~/.gemini/AGENTS.md` stays plain Markdown without frontmatter and splits into `agentsync-part-*.md` once the merged body exceeds `22,000` bytes, and Windsurf reports a `warning` when the rendered body exceeds its 6,000-character `memories/global_rules.md` limit.
+
+Hand-written content at a target is still imported before the copy replaces it, and managed copies are never imported back. Note which runtimes also read a shared file: `agents.md` affects `~/.agents/AGENTS.md`, which Kimi Code and Factory Droid also load, and `antigravity-cli` has no separate instruction target, so use `antigravity.md`.
+
+Unknown fragment names warn in the report instead of failing the run. Repository and batch modes ignore this directory, and the watcher treats a fragment-only change as a rules change, so MCP files are not rewritten.
+
 ## Check mode and report states
 
 `--check` does not create sources, backups, directories, aliases, skills, ignore files, or MCP configuration. A `would ...` detail describes a future apply, not an action already performed. Unsupported arguments and mode combinations exit 2 before synchronization; operational failures, including a reported `blocked` target, exit 1. Successful previews may still report changes that an apply would make.
@@ -57,7 +89,7 @@ Save the policy beside the canonical sources, then apply or let the watcher hand
 |---|---|---|
 | `skipped` | Runtime is not installed | No action needed |
 | `ok` | Target matches the canonical source or filtered view | No action needed |
-| `warning` | Policy contains an unknown target name | Review the policy |
+| `warning` | Unknown policy target name, unknown instruction fragment name, or content above a runtime limit | Review the policy or fragment |
 | `missing` | Source or target is absent | Apply to create it |
 | `mergeable` | Target contains unique content | Apply, then review the preserved content |
 | `replaceable` | Target can be backed up and replaced | Apply |
@@ -67,7 +99,7 @@ Save the policy beside the canonical sources, then apply or let the watcher hand
 
 ## Watch mode and services
 
-`--watch` is optional; a plain `agentsync` remains a one-shot command. The watcher polls canonical instructions, MCP configuration, skills, policy, runtime detection, and Pi output selection. It does not monitor runtime output files or import edits made through a runtime's UI.
+`--watch` is optional; a plain `agentsync` remains a one-shot command. The watcher polls canonical instructions, per-tool instruction fragments, MCP configuration, skills, policy, runtime detection, and Pi output selection. It does not monitor runtime output files or import edits made through a runtime's UI.
 
 The default polling interval is two seconds. Changes must remain stable for 1.5 seconds; newly detected runtimes receive about five additional seconds for installation to finish. Skill fingerprints ignore Syncthing conflict files, `.DS_Store`, and `.stversions`, but include hidden skill content such as `.system`. Directory modification times are excluded so ignored files cannot trigger synchronization.
 
@@ -146,7 +178,7 @@ Open a concrete project workspace and start a fresh session. Ask it to quote a d
 
 ## Antigravity 24 KB rule limit and auto-splitting
 
-Antigravity truncates any single global or workspace rule file above `24,000` UTF-8 bytes. When `~/.config/agentsync/AGENTS.md` fits within `22,000` bytes, `~/.gemini/AGENTS.md` uses a direct alias (`link`). Once it exceeds `22,000` bytes, `agentsync` keeps `~/.config/agentsync/AGENTS.md` intact and writes `<= 22,000`-byte managed chunks: plain Markdown `~/.gemini/AGENTS.md` (with no YAML frontmatter) plus `~/.gemini/config/rules/agentsync-part-02.md` ... with `trigger: always_on` frontmatter, backing up and removing leftover part files when the canonical file shrinks. Because Antigravity also shares `~/.gemini`, Gemini CLI targets (`~/.gemini/GEMINI.md`, `~/.gemini/settings.json`) are skipped on Antigravity-only hosts that lack Gemini-CLI-specific markers.
+Antigravity truncates any single global or workspace rule file above `24,000` UTF-8 bytes. When `~/.config/agentsync/AGENTS.md` fits within `22,000` bytes, `~/.gemini/AGENTS.md` uses a direct alias (`link`). Once it exceeds `22,000` bytes, `agentsync` keeps `~/.config/agentsync/AGENTS.md` intact and writes `<= 22,000`-byte managed chunks: plain Markdown `~/.gemini/AGENTS.md` (with no YAML frontmatter) plus `~/.gemini/config/rules/agentsync-part-02.md` ... with `trigger: always_on` frontmatter, backing up and removing leftover part files when the canonical file shrinks. The comparison uses the rendered body, so a merged `antigravity.md` fragment can push an otherwise small source into the split state. Because Antigravity also shares `~/.gemini`, Gemini CLI targets (`~/.gemini/GEMINI.md`, `~/.gemini/settings.json`) are skipped on Antigravity-only hosts that lack Gemini-CLI-specific markers.
 
 ## Installation
 

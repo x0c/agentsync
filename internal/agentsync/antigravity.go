@@ -291,7 +291,7 @@ type antigravityPartSpec struct {
 	data []byte
 }
 
-func syncAntigravityTarget(source string, target Target, opts Options) (TargetResult, []string, error) {
+func syncAntigravityTarget(source string, target Target, render instructionRender, opts Options) (TargetResult, []string, error) {
 	result := TargetResult{Path: target.Path}
 	if target.Detect != "" && !pathExists(target.Detect) {
 		result.Status = "skipped"
@@ -317,14 +317,86 @@ func syncAntigravityTarget(source string, target Target, opts Options) (TargetRe
 		}
 	}
 
-	sourceData, err := os.ReadFile(source)
+	sourceData, err := render.body(source)
 	if err != nil {
 		return result, nil, err
 	}
 	if len(sourceData) <= antigravityMaxChunkBytes {
+		if render.active() {
+			return syncAntigravityOverlayCopy(source, sourceData, target, partFiles, render, opts)
+		}
 		return syncAntigravityCompact(source, sourceData, target, partFiles, opts)
 	}
 	return syncAntigravitySplit(source, sourceData, target, rulesDir, partFiles, opts)
+}
+
+// syncAntigravityOverlayCopy writes the merged source and runtime fragment as
+// one managed file. A standalone ~/.gemini/AGENTS.md must not carry YAML
+// frontmatter, and Antigravity does not follow a symlink here.
+func syncAntigravityOverlayCopy(source string, body []byte, target Target, partFiles []string, render instructionRender, opts Options) (TargetResult, []string, error) {
+	result := TargetResult{Path: target.Path}
+	expected := managedCopyBody(source, body, render.Runtime)
+	detail := fmt.Sprintf("antigravity managed copy with the %s overlay", render.Runtime)
+	info, lstatErr := os.Lstat(target.Path)
+	targetExists := lstatErr == nil
+	if lstatErr != nil && !os.IsNotExist(lstatErr) {
+		return result, nil, lstatErr
+	}
+	if !opts.Force && len(partFiles) == 0 && targetExists && antigravityFileMatches(target.Path, expected) {
+		result.Status = "ok"
+		result.Detail = detail
+		return result, nil, nil
+	}
+	if opts.Check {
+		if !targetExists {
+			result.Status = "missing"
+			result.Detail = "would create " + detail
+		} else {
+			result.Status = "replaceable"
+			result.Detail = "would update " + detail
+		}
+		return result, nil, nil
+	}
+	var backups []string
+	if targetExists {
+		backup, err := backupFile(target.Path)
+		if err != nil {
+			return result, backups, err
+		}
+		if backup != "" {
+			backups = append(backups, backup)
+		}
+		if isManagedLink(info) {
+			if err := removePath(target.Path); err != nil {
+				return result, backups, err
+			}
+		}
+	}
+	if err := writeFileAtomic(target.Path, expected, 0o644); err != nil {
+		return result, backups, err
+	}
+	for _, part := range partFiles {
+		backup, err := backupFile(part)
+		if err != nil {
+			return result, backups, err
+		}
+		if backup != "" {
+			backups = append(backups, backup)
+		}
+		if err := removePath(part); err != nil {
+			return result, backups, err
+		}
+	}
+	if !targetExists {
+		result.Status = "created"
+	} else {
+		result.Status = "replaced"
+	}
+	result.Detail = detail
+	if len(partFiles) > 0 {
+		result.Detail = fmt.Sprintf("%s (pruned %d leftover antigravity split rule(s))", detail, len(partFiles))
+	}
+	return result, backups, nil
 }
 
 func checkAntigravityPrimaryTarget(path string) error {
@@ -345,7 +417,7 @@ func syncAntigravityCompact(source string, sourceData []byte, target Target, par
 	result := TargetResult{Path: target.Path}
 	linkTarget := Target{Path: target.Path, Mode: "link", Detect: target.Detect}
 	if len(partFiles) == 0 {
-		res, backup, err := syncTarget(source, linkTarget, opts)
+		res, backup, err := syncTarget(source, linkTarget, instructionRender{}, opts)
 		var backups []string
 		if backup != "" {
 			backups = append(backups, backup)
@@ -388,7 +460,7 @@ func syncAntigravityCompact(source string, sourceData []byte, target Target, par
 			return result, backups, err
 		}
 	}
-	res, backup, err := syncTarget(source, linkTarget, opts)
+	res, backup, err := syncTarget(source, linkTarget, instructionRender{}, opts)
 	if backup != "" {
 		backups = append(backups, backup)
 	}

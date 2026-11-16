@@ -411,7 +411,7 @@ func syncSkillRootAlias(source, target string, opts Options) (TargetResult, stri
 			result.Detail = "would create skill directory alias"
 			return result, "", nil
 		}
-		kind, err := createAlias(source, target, "link")
+		kind, err := createAlias(source, target, "link", instructionRender{})
 		if err != nil {
 			return result, "", err
 		}
@@ -447,7 +447,7 @@ func syncSkillRootAlias(source, target string, opts Options) (TargetResult, stri
 		if err := os.Remove(target); err != nil {
 			return result, "", err
 		}
-		kind, err := createAlias(source, target, "link")
+		kind, err := createAlias(source, target, "link", instructionRender{})
 		if err != nil {
 			return result, "", err
 		}
@@ -472,7 +472,7 @@ func syncSkillRootAlias(source, target string, opts Options) (TargetResult, stri
 	if err := os.RemoveAll(target); err != nil {
 		return result, "", err
 	}
-	kind, err := createAlias(source, target, "link")
+	kind, err := createAlias(source, target, "link", instructionRender{})
 	if err != nil {
 		return result, "", err
 	}

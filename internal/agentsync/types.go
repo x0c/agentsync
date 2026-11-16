@@ -28,6 +28,9 @@ func (opts Options) Validate() error {
 }
 
 type Target struct {
+	// Name is the stable runtime key shared with skill and MCP targets (e.g.
+	// "pi"). It also selects an optional instruction overlay fragment.
+	Name string
 	Path string
 	Mode string
 	// Detect is the runtime installation directory; an empty value disables gating.
@@ -44,6 +47,10 @@ type Config struct {
 	MCPTargets   []MCPTarget
 	// PolicyPath is ~/.config/agentsync/sync-policy.json (optional; missing = allow-all).
 	PolicyPath string
+	// InstructionOverlayDir holds optional <runtime>.md fragments that extend the
+	// canonical source for one runtime only. Empty outside global mode so
+	// repository and batch runs never pick up global overlays.
+	InstructionOverlayDir string
 }
 
 type MCPTarget struct {

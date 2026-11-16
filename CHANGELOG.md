@@ -6,6 +6,24 @@ next version's section. A `Release: minor` or `Release: major` line requests a
 larger version step; `Release: hold <reason>` keeps the changes unreleased until
 the named acceptance is done.
 
+## Unreleased
+
+Release: minor
+
+### English
+
+- Add per-runtime instruction fragments: `~/.config/agentsync/instructions/<runtime>.md` appends a fragment to the canonical `AGENTS.md` for one installed tool, which then receives a managed copy (header `overlay="<runtime>"`) instead of a symlink. Removing or blanking the fragment backs up the copy and restores the link. Unknown fragment names warn, case-insensitive duplicates fail before any write, and a whitespace-only fragment counts as absent.
+- Keep runtime format rules for merged bodies: Cursor keeps `alwaysApply: true`, Antigravity stays plain Markdown without frontmatter and still splits above `22,000` bytes, and Windsurf reports a warning above its 6,000-character `global_rules.md` limit.
+- Limit fragments to global mode: repository and batch runs ignore `instructions/`, and the watcher treats a fragment-only change as a rules change so MCP files are not rewritten.
+- Never treat generated copies as instruction input: initializing a missing canonical source skips `managed-by: agentsync` files, so an overlay copy cannot seed or duplicate itself into `AGENTS.md`.
+
+### 简体中文
+
+- 新增单工具专属规则：在 `~/.config/agentsync/instructions/<runtime>.md` 写片段后，该工具会在 canonical `AGENTS.md` 之后追加这段内容，并获得带 `overlay="<runtime>"` 头部标记的托管副本，而不是符号链接。删除或清空片段会备份该副本并恢复链接。未知文件名只告警，大小写重名在写入前直接报错，仅含空白的片段视为不存在。
+- 合并后的正文仍遵守各工具格式：Cursor 保留 `alwaysApply: true`；Antigravity 保持无 frontmatter 的纯 Markdown，超过 `22,000` 字节仍会自动切分；Windsurf 超过 `global_rules.md` 的 6,000 字符上限时给出告警。
+- 片段只在全局模式生效：仓库模式与批量模式忽略 `instructions/`，watch 仅把片段改动当作规则变更，不重写 MCP 配置。
+- 生成副本不再作为规则来源：canonical 源缺失需要重建时跳过 `managed-by: agentsync` 文件，避免把专属片段重复写回 `AGENTS.md`。
+
 ## 1.2.1
 
 These notes ship the Antigravity work first tagged `v1.2.0`, which was never published: that tag's release run failed the Windows test fixed below.

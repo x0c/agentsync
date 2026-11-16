@@ -53,7 +53,7 @@ func TestDirAliasFallbackOrderSymlinkThenJunction(t *testing.T) {
 		return os.Symlink(src, link)
 	}
 
-	kind, err := createAlias(source, target, "link")
+	kind, err := createAlias(source, target, "link", instructionRender{})
 	if err != nil {
 		t.Fatalf("createAlias with symlink denied should fall back to junction: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestDirAliasNeverFallsBackToStaticCopy(t *testing.T) {
 		return errors.New("junction failed: reparse not supported on this volume")
 	}
 
-	_, err := createAlias(source, target, "link")
+	_, err := createAlias(source, target, "link", instructionRender{})
 	if err == nil {
 		t.Fatal("expected failure when both symlink and junction fail")
 	}
@@ -170,7 +170,7 @@ func TestFileAliasStillFallsBackToCopy(t *testing.T) {
 		return errors.New("operation not permitted")
 	}
 
-	kind, err := createAlias(source, target, "link")
+	kind, err := createAlias(source, target, "link", instructionRender{})
 	if err != nil {
 		t.Fatal(err)
 	}

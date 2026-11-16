@@ -41,6 +41,23 @@ A dash means agentsync does not create a dedicated target for that feature. A ru
 
 `PI_CODING_AGENT_DIR` overrides Pi's agent directory; the default is `~/.pi/agent`. Pi needs no additional skill alias because it can read the shared entry. `DSH_HOME` controls dsh MCP patch output; the instruction and skill entries above are the defaults currently defined in the target list. Do not infer that every runtime's configuration-root override applies to all agentsync features.
 
+## Per-runtime instruction fragments
+
+Every instruction target has a runtime key used by `instructions/<key>.md` and by `sync-policy.json`: `claude`, `codex`, `opencode`, `gemini`, `antigravity`, `qwen`, `copilot`, `kimi-code`, `grok`, `amp`, `crush`, `goose`, `factory`, `iflow`, `kilo`, `pi`, `dsh`, `cursor`, `windsurf`, `zed`, `codebuddy`, `qoder`, `junie`, `kiro`, `joycode`, and `agents`. Aider Desk and Antigravity CLI have no separate instruction target, so a fragment for them is reported as an unknown runtime.
+
+A fragment changes only how that target is materialized: source plus fragment becomes a managed copy instead of a link. It also inherits each runtime's own constraints.
+
+| Runtime | Constraint that still applies to a merged body |
+|---|---|
+| `cursor` | Managed `.mdc` with `alwaysApply: true`; plain `.md` is ignored by Cursor's rule system |
+| `antigravity` | Plain Markdown, no YAML frontmatter; above `22,000` bytes the merged body splits into `AGENTS.md` plus `config/rules/agentsync-part-*.md` |
+| `windsurf` | `memories/global_rules.md` is capped at 6,000 characters; agentsync reports a `warning` when the rendered body exceeds it |
+| `copilot` | Copilot CLI rejects `~/` and external absolute paths in `@` references, so only the merged file body is authoritative |
+| `agents` | Shared entry also read by Kimi Code and Factory Droid; a fragment here reaches all of them |
+| `kimi-code`, `factory` | Their own entries are independent, but both runtimes also read the shared `agents` entry |
+
+`codex` reads `AGENTS.override.md` instead of `AGENTS.md` when that file exists; Pi exposes `APPEND_SYSTEM.md` for system-prompt text, but agentsync merges fragments into `AGENTS.md` so one mechanism covers every runtime. The [workflow guide](AGENTSYNC_GUIDE.md#per-tool-instruction-fragments) owns the directory layout and report behavior.
+
 ## Windows linking
 
 Where the filesystem allows, instruction and skill targets use symbolic links. On Windows, skill directories fall back in this order: symbolic link, then NTFS directory junction, then a clear error that names Windows Developer Mode and `start ms-settings:developers`. There is no silent static copy for directories. The report detail for a junction target is `junction`.
