@@ -103,7 +103,7 @@ The table covers preview verdicts. Apply reports `created`, `linked`, `replaced`
 
 `--watch` is optional; a plain `agentsync` remains a one-shot command. The watcher polls canonical instructions, per-tool instruction fragments, MCP configuration, skills, policy, runtime detection, and Pi output selection. It does not monitor runtime output files or import edits made through a runtime's UI.
 
-The default polling interval is two seconds. Changes must remain stable for 1.5 seconds; newly detected runtimes receive about five additional seconds for installation to finish. Skill fingerprints ignore Syncthing conflict files, `.DS_Store`, and `.stversions`, but include hidden skill content such as `.system`. Directory modification times are excluded so ignored files cannot trigger synchronization.
+The default polling interval is two seconds. Changes must remain stable for 1.5 seconds; newly detected runtimes receive about five additional seconds for installation to finish. Skill fingerprints ignore Syncthing conflict files, `.DS_Store`, and `.stversions`, but include hidden skill content such as `.system`. Directory modification times are excluded so ignored files cannot trigger synchronization. A linked `instructions/` or skills directory is resolved before fingerprinting, so edits inside a dotfiles-managed directory still trigger a run.
 
 Instruction/skill-only changes with an unchanged policy skip MCP writes. MCP, policy, Pi selection, and runtime installation changes can trigger MCP synchronization. Failed runs do not advance the successful fingerprint and are retried; errors go to stderr while the watcher continues.
 

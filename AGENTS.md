@@ -58,8 +58,8 @@ Read the documents relevant to the current task before changing behavior; consul
 | Document | Contents |
 |---|---|
 | [README.md](README.md) / [README.zh-CN.md](README.zh-CN.md) | Installation, first use, feature boundaries, and public safety guarantees. |
-| [Workflow guide](docs/AGENTSYNC_GUIDE.md) | Commands, report states, watch/service setup, isolated validation, Cursor troubleshooting, and releases. |
+| [Workflow guide](docs/AGENTSYNC_GUIDE.md) | Commands, per-tool instruction fragments, report states, watch/service setup, isolated validation, Cursor troubleshooting, and releases. |
 | [Synchronization knowledge base](docs/AGENTSYNC_KNOWLEDGE_BASE.md) | Ownership, synchronization mechanisms, preservation boundaries, implementation anchors, and known limitations. |
-| [Instruction and skill paths](docs/agent_runtime_global_paths.md) | Implemented runtime targets, discovery differences, and confidence limits. |
+| [Instruction and skill paths](docs/agent_runtime_global_paths.md) | Implemented runtime targets, per-runtime fragment keys, discovery differences, and confidence limits. |
 | [MCP paths and formats](docs/agent_runtime_mcp_paths.md) | Runtime configuration locations, merge strategies, schema translation, and compatibility constraints. |
 | [GitHub discovery guide](docs/GITHUB_DISCOVERY_GUIDE.md) | Public positioning, README/platform consistency, discovery references, and traffic measurement limits. |
