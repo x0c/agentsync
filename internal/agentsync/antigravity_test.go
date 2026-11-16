@@ -293,7 +293,7 @@ func TestAntigravityLargeSourceSplitsIdempotentlyAndShrinks(t *testing.T) {
 
 func TestAntigravitySplitUTF8WithoutSpaces(t *testing.T) {
 	sample := strings.Repeat("\u6c49", 10000)
-	chunks := splitAntigravityRules("/tmp/AGENTS.md", "0123456789abcdef", []byte(sample), antigravityMaxChunkBytes)
+	chunks := splitAntigravityRules("/tmp/AGENTS.md", "0123456789abcdef", "", []byte(sample), antigravityMaxChunkBytes)
 	if len(chunks) < 2 {
 		t.Fatalf("expected >=2 chunks for 30 KB CJK text, got %d", len(chunks))
 	}

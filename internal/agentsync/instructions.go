@@ -18,7 +18,8 @@ const (
 	overlayFileSuffix    = ".md"
 	overlayBeginPrefix   = "<!-- agentsync:begin overlay target=\""
 	overlayBeginSuffix   = "\" -->\n"
-	overlayEndMarker     = "<!-- agentsync:end overlay -->\n"
+	overlayEndTag        = "<!-- agentsync:end overlay -->"
+	overlayEndMarker     = overlayEndTag + "\n"
 	overlayMarkerAttr    = "overlay="
 	windsurfRulesLimit   = 6000
 	windsurfRulesPathWay = "memories/global_rules.md"
@@ -206,8 +207,8 @@ func newInstructionRender(target Target, overlays map[string]string) instruction
 }
 
 // windsurfLimitWarning reports content that Windsurf truncates. Its
-// memories/global_rules.md is capped at 6000 characters, whether the file holds
-// an overlay or the bare source.
+// memories/global_rules.md is capped at 6000 characters, so the generated
+// marker header counts too whenever the target is a managed copy.
 func windsurfLimitWarning(source string, target Target, render instructionRender, status string) *TargetResult {
 	if target.Name != "windsurf" || status == "skipped" {
 		return nil
@@ -215,6 +216,9 @@ func windsurfLimitWarning(source string, target Target, render instructionRender
 	body, err := render.body(source)
 	if err != nil {
 		return nil
+	}
+	if render.active() {
+		body = managedCopyBody(source, body, render.Runtime)
 	}
 	length := utf8.RuneCount(body)
 	if length <= windsurfRulesLimit {

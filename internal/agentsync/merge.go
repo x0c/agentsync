@@ -61,7 +61,7 @@ func createSourceFromFiles(source string, files []string) error {
 		return os.WriteFile(source, []byte(defaultSourceContent()), 0o644)
 	}
 
-	base, err := readPayload(files[0])
+	base, err := importablePayload(files[0])
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func createSourceFromFiles(source string, files []string) error {
 }
 
 func appendImportedContent(source, origin string) (bool, error) {
-	data, err := readPayload(origin)
+	data, err := importablePayload(origin)
 	if err != nil {
 		return false, err
 	}

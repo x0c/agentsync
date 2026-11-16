@@ -46,6 +46,45 @@ func readPayload(path string) ([]byte, error) {
 	return []byte(s), nil
 }
 
+// importablePayload returns content that may be appended to the canonical
+// source. Generated per-runtime sections are removed so a copied or hand-edited
+// generated file can never push fragment text into the source or into another
+// runtime. Managed-copy comparison uses readPayload instead: a rendered copy
+// legitimately contains its own overlay section.
+func importablePayload(path string) ([]byte, error) {
+	data, err := readPayload(path)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(stripOverlayBlocks(string(data))), nil
+}
+
+// stripOverlayBlocks removes generated per-runtime sections so a copied or
+// hand-edited generated file can never push fragment text into the canonical
+// source or into another runtime.
+func stripOverlayBlocks(s string) string {
+	for {
+		begin := strings.Index(s, overlayBeginPrefix)
+		if begin < 0 {
+			return s
+		}
+		relEnd := strings.Index(s[begin:], overlayEndTag)
+		if relEnd < 0 {
+			return s
+		}
+		end := begin + relEnd + len(overlayEndTag)
+		if end < len(s) && s[end] == '\n' {
+			end++
+		}
+		start := begin
+		// Swallow the blank line the renderer inserted before the block.
+		if start >= 2 && s[start-1] == '\n' && s[start-2] == '\n' {
+			start--
+		}
+		s = s[:start] + s[end:]
+	}
+}
+
 func stripYAMLFrontmatter(s string) (string, bool) {
 	if !strings.HasPrefix(s, "---\n") {
 		return "", false
@@ -95,34 +134,32 @@ func writeManagedCopy(source, target string) error {
 	return writeManagedCopyBytes(source, target, data, "")
 }
 
-// managedCopyBody prefixes payload with the generated-file marker. The hash
-// covers the exact bytes written after the marker, so editing either the source
-// or a runtime overlay invalidates the copy.
+// managedMarkerLine renders the generated-file marker. The hash covers the
+// exact bytes written after it, so editing the source or a runtime fragment
+// invalidates the copy.
+func managedMarkerLine(source, sumHex, overlay, suffix string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%ssource=%q sha256=%s", managedMarkerPrefix, source, sumHex)
+	if overlay != "" {
+		fmt.Fprintf(&b, " %s%q", overlayMarkerAttr, overlay)
+	}
+	b.WriteString(suffix)
+	b.WriteString(" -->\n")
+	return b.String()
+}
+
 func managedCopyBody(source string, payload []byte, overlay string) []byte {
 	sum := sha256.Sum256(payload)
-	var b strings.Builder
-	switch overlay {
-	case "":
-		fmt.Fprintf(&b, "%ssource=%q sha256=%s -->\n", managedMarkerPrefix, source, hex.EncodeToString(sum[:]))
-	default:
-		fmt.Fprintf(&b, "%ssource=%q sha256=%s %s%q -->\n", managedMarkerPrefix, source, hex.EncodeToString(sum[:]), overlayMarkerAttr, overlay)
-	}
-	b.Write(payload)
-	return []byte(b.String())
+	line := managedMarkerLine(source, hex.EncodeToString(sum[:]), overlay, "")
+	return append([]byte(line), payload...)
 }
 
 func writeManagedCopyBytes(source, target string, payload []byte, overlay string) error {
-	if err := ensureParent(target); err != nil {
-		return err
-	}
-	return os.WriteFile(target, managedCopyBody(source, payload, overlay), 0o644)
+	return writeFileAtomic(target, managedCopyBody(source, payload, overlay), 0o644)
 }
 
 func writeCursorRuleBytes(source, target string, payload []byte, overlay string) error {
-	if err := ensureParent(target); err != nil {
-		return err
-	}
-	return os.WriteFile(target, cursorRuleBody(source, payload, overlay), 0o644)
+	return writeFileAtomic(target, cursorRuleBody(source, payload, overlay), 0o644)
 }
 
 // cursorRuleBody adds the alwaysApply frontmatter Cursor requires, then the

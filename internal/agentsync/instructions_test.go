@@ -3,8 +3,10 @@ package agentsync
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // overlayFixture creates an isolated canonical source and overlay directory and
@@ -35,6 +37,13 @@ func overlayResult(t *testing.T, names []TargetResult, path string) TargetResult
 	}
 	t.Fatalf("no report entry for %s in %+v", path, names)
 	return TargetResult{}
+}
+
+// overlayAliasRestored reports whether path follows source again. Windows and
+// volumes that refuse symlinks use the hardlink or managed-copy fallback, so a
+// restored alias is not always a symlink there.
+func overlayAliasRestored(path, source string) bool {
+	return symlinkPointsTo(path, source) || (managedCopyOverlay(path) == "" && sameContent(path, source))
 }
 
 func TestInstructionOverlayAppliesToOneRuntime(t *testing.T) {
@@ -76,7 +85,7 @@ func TestInstructionOverlayAppliesToOneRuntime(t *testing.T) {
 	if strings.HasPrefix(piBody, "---\n") {
 		t.Fatal("plain Markdown target must not receive YAML frontmatter")
 	}
-	if !symlinkPointsTo(codexPath, source) {
+	if !overlayAliasRestored(codexPath, source) {
 		t.Fatal("a runtime without an overlay must stay a symlink")
 	}
 	if strings.Contains(hardeningRead(t, codexPath), "PI_ONLY_RULE") {
@@ -176,7 +185,7 @@ func TestInstructionOverlayRemovalRestoresSymlink(t *testing.T) {
 			if result.Status != "replaced" || !strings.Contains(result.Detail, "restored") {
 				t.Fatalf("unexpected removal result %+v", result)
 			}
-			if !symlinkPointsTo(piPath, source) {
+			if !overlayAliasRestored(piPath, source) {
 				t.Fatal("target did not return to a symlink once the overlay was gone")
 			}
 			if got := hardeningRead(t, piPath); got != "BASE_RULE\n" {
@@ -265,7 +274,7 @@ func TestInstructionOverlayCursorKeepsFrontmatter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("syncConfig() error = %v", err)
 	}
-	if got := overlayResult(t, report.Results, cursorPath).Detail; got != "cursor-rule" {
+	if got := overlayResult(t, report.Results, cursorPath).Detail; got != "cursor-rule with the cursor overlay" {
 		t.Fatalf("unexpected cursor detail %q", got)
 	}
 	body := hardeningRead(t, cursorPath)
@@ -351,7 +360,7 @@ func TestInstructionOverlayAntigravityThresholds(t *testing.T) {
 	}
 
 	// Fragments do not have to fit: crossing the threshold splits the merge.
-	large := buildLargeAntigravitySource(21000)
+	large := buildLargeAntigravitySource(antigravityMaxChunkBytes - 1000)
 	hardeningWrite(t, overlayPath, strings.Repeat("ANTIGRAVITY_OVERLAY_LINE\n", 200))
 	if err := os.WriteFile(source, []byte(large), 0o644); err != nil {
 		t.Fatal(err)
@@ -400,7 +409,7 @@ func TestInstructionOverlayAntigravityThresholds(t *testing.T) {
 	if _, err := syncConfig(cfg, Options{}); err != nil {
 		t.Fatalf("overlay removal error = %v", err)
 	}
-	if !symlinkPointsTo(primary, source) {
+	if !overlayAliasRestored(primary, source) {
 		t.Fatal("antigravity target did not return to a symlink")
 	}
 }
@@ -412,7 +421,7 @@ func TestInstructionOverlayWindsurfLimitWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := Target{Name: "windsurf", Path: windsurfPath, Mode: "link", Detect: filepath.Join(home, ".codeium", "windsurf")}
-	hardeningWrite(t, filepath.Join(overlayDir, "windsurf.md"), strings.Repeat("W", 6100))
+	hardeningWrite(t, filepath.Join(overlayDir, "windsurf.md"), strings.Repeat("W", windsurfRulesLimit+200))
 	cfg := Config{Source: source, Targets: []Target{target}, InstructionOverlayDir: overlayDir}
 
 	report, err := syncConfig(cfg, Options{})
@@ -473,7 +482,7 @@ func TestInstructionOverlayNamesAndValidation(t *testing.T) {
 	if !warned {
 		t.Fatalf("expected an unknown runtime warning, got %+v", report.Results)
 	}
-	if !symlinkPointsTo(piPath, source) || strings.Contains(hardeningRead(t, piPath), "UNKNOWN_RUNTIME_RULE") {
+	if !overlayAliasRestored(piPath, source) || strings.Contains(hardeningRead(t, piPath), "UNKNOWN_RUNTIME_RULE") {
 		t.Fatal("an unknown fragment must not change a runtime without an overlay")
 	}
 
@@ -606,5 +615,232 @@ func TestInstructionOverlayDoesNotSeedNewSource(t *testing.T) {
 	}
 	if got := hardeningRead(t, piPath); !strings.Contains(got, "PI_ONLY_RULE") {
 		t.Fatalf("recreated source did not reapply the fragment: %q", got)
+	}
+}
+
+func TestInstructionOverlayPreviewWithoutSource(t *testing.T) {
+	home, source, overlayDir := overlayFixture(t)
+	piPath := filepath.Join(home, ".pi", "agent", "AGENTS.md")
+	target := overlayTarget(t, "pi", piPath)
+	// A hand-written target exists, the canonical source does not.
+	hardeningWrite(t, piPath, "HAND_WRITTEN_RULE\n")
+	if err := os.Remove(source); err != nil {
+		t.Fatal(err)
+	}
+	hardeningWrite(t, filepath.Join(overlayDir, "pi.md"), "PI_ONLY_RULE\n")
+	cfg := Config{Source: source, Targets: []Target{target}, InstructionOverlayDir: overlayDir}
+
+	report, err := syncConfig(cfg, Options{Check: true})
+	if err != nil {
+		t.Fatalf("preview without a source must not fail: %v", err)
+	}
+	if got := overlayResult(t, report.Results, source).Status; got != "missing" {
+		t.Fatalf("source preview = %q, want missing (%+v)", got, report.Results)
+	}
+	if got := overlayResult(t, report.Results, piPath).Status; got != "mergeable" && got != "replaceable" {
+		t.Fatalf("target preview = %q, want mergeable or replaceable (%+v)", got, report.Results)
+	}
+	if pathExists(source) {
+		t.Fatal("preview recreated the source")
+	}
+	if got := hardeningRead(t, piPath); got != "HAND_WRITTEN_RULE\n" {
+		t.Fatalf("preview changed the target: %q", got)
+	}
+
+	// Apply still works and applies the fragment to the recreated source.
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("apply without a source error = %v", err)
+	}
+	if got := hardeningRead(t, piPath); !strings.Contains(got, "PI_ONLY_RULE") || !strings.Contains(got, "HAND_WRITTEN_RULE") {
+		t.Fatalf("apply lost content: %q", got)
+	}
+}
+
+func TestInstructionOverlayValidationPrecedesWrites(t *testing.T) {
+	t.Run("directory-instead-of-file", func(t *testing.T) {
+		home, source, _ := overlayFixture(t)
+		piPath := filepath.Join(home, ".pi", "agent", "AGENTS.md")
+		target := overlayTarget(t, "pi", piPath)
+		hardeningWrite(t, piPath, "HAND_WRITTEN_RULE\n")
+		// A non-directory overlay path must be rejected before the source changes.
+		overlayAsFile := filepath.Join(home, "config", "instructions")
+		hardeningWrite(t, overlayAsFile, "not a directory\n")
+		cfg := Config{Source: source, Targets: []Target{target}, InstructionOverlayDir: overlayAsFile}
+		before := hardeningRead(t, source)
+		if _, err := syncConfig(cfg, Options{}); err == nil {
+			t.Fatal("a non-directory overlay path must fail")
+		}
+		if got := hardeningRead(t, source); got != before {
+			t.Fatalf("failed validation modified the source: %q", got)
+		}
+		if got := hardeningRead(t, piPath); got != "HAND_WRITTEN_RULE\n" {
+			t.Fatalf("failed validation modified the target: %q", got)
+		}
+	})
+
+	t.Run("unreadable-fragment", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Unix mode bits do not model Windows ACLs")
+		}
+		home, source, overlayDir := overlayFixture(t)
+		piPath := filepath.Join(home, ".pi", "agent", "AGENTS.md")
+		target := overlayTarget(t, "pi", piPath)
+		hardeningWrite(t, piPath, "HAND_WRITTEN_RULE\n")
+		fragment := filepath.Join(overlayDir, "pi.md")
+		hardeningWrite(t, fragment, "PI_ONLY_RULE\n")
+		if err := os.Chmod(fragment, 0o000); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(fragment, 0o600) })
+		if _, err := os.ReadFile(fragment); err == nil {
+			t.Skip("effective user can read a mode-000 file")
+		}
+		cfg := Config{Source: source, Targets: []Target{target}, InstructionOverlayDir: overlayDir}
+		before := hardeningRead(t, source)
+		if _, err := syncConfig(cfg, Options{}); err == nil {
+			t.Fatal("an unreadable fragment must fail")
+		}
+		if got := hardeningRead(t, source); got != before {
+			t.Fatalf("failed validation modified the source: %q", got)
+		}
+	})
+}
+
+func TestInstructionOverlayBlockNeverImported(t *testing.T) {
+	home, source, overlayDir := overlayFixture(t)
+	piPath := filepath.Join(home, ".pi", "agent", "AGENTS.md")
+	codexPath := filepath.Join(home, ".codex", "AGENTS.md")
+	hardeningWrite(t, filepath.Join(overlayDir, "pi.md"), "PI_ONLY_RULE\n")
+	cfg := Config{
+		Source: source,
+		Targets: []Target{
+			overlayTarget(t, "pi", piPath),
+			overlayTarget(t, "codex", codexPath),
+		},
+		InstructionOverlayDir: overlayDir,
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("initial sync error = %v", err)
+	}
+	// Simulate a user copying a generated body without its marker line.
+	copied, err := readPayload(piPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(codexPath); err != nil {
+		t.Fatal(err)
+	}
+	hardeningWrite(t, codexPath, string(copied))
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("resync error = %v", err)
+	}
+	sourceBody := hardeningRead(t, source)
+	if strings.Contains(sourceBody, "agentsync:begin overlay") || strings.Contains(sourceBody, "PI_ONLY_RULE") {
+		t.Fatalf("generated overlay leaked into the source: %q", sourceBody)
+	}
+	if body := hardeningRead(t, codexPath); strings.Contains(body, "agentsync:begin overlay") || strings.Contains(body, "PI_ONLY_RULE") {
+		t.Fatalf("fragment leaked into an unrelated runtime: %q", body)
+	}
+}
+
+func TestInstructionOverlayWindsurfCountsHeader(t *testing.T) {
+	home, source, overlayDir := overlayFixture(t)
+	windsurfPath := filepath.Join(home, ".codeium", "windsurf", "memories", "global_rules.md")
+	if err := os.MkdirAll(filepath.Join(home, ".codeium", "windsurf"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := Target{Name: "windsurf", Path: windsurfPath, Mode: "link", Detect: filepath.Join(home, ".codeium", "windsurf")}
+	base, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Size the fragment so the body alone fits the limit but the file does not.
+	overhead := utf8.RuneCount(renderInstructionOverlay(base, "windsurf", ""))
+	fragment := strings.Repeat("W", windsurfRulesLimit-overhead)
+	if got := utf8.RuneCount(renderInstructionOverlay(base, "windsurf", fragment)); got != windsurfRulesLimit {
+		t.Fatalf("fixture body is %d characters, want exactly %d", got, windsurfRulesLimit)
+	}
+	hardeningWrite(t, filepath.Join(overlayDir, "windsurf.md"), fragment)
+	cfg := Config{Source: source, Targets: []Target{target}, InstructionOverlayDir: overlayDir}
+
+	report, err := syncConfig(cfg, Options{})
+	if err != nil {
+		t.Fatalf("syncConfig() error = %v", err)
+	}
+	var warned bool
+	for _, result := range report.Results {
+		if result.Status == "warning" && result.Path == windsurfPath {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Fatalf("expected a warning because the header pushes the file over the limit: %+v", report.Results)
+	}
+}
+
+func TestInstructionOverlayAntigravitySplitRecordsOverlay(t *testing.T) {
+	home, source, overlayDir := overlayFixture(t)
+	configDir := filepath.Join(home, ".gemini", "config")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	primary := filepath.Join(home, ".gemini", "AGENTS.md")
+	cfg := Config{
+		Source: source,
+		Targets: []Target{{
+			Name: "antigravity", Path: primary, Mode: "antigravity", Detect: configDir,
+		}},
+		InstructionOverlayDir: overlayDir,
+	}
+	hardeningWrite(t, source, buildLargeAntigravitySource(antigravityMaxChunkBytes-1000))
+	hardeningWrite(t, filepath.Join(overlayDir, "antigravity.md"), strings.Repeat("ANTIGRAVITY_OVERLAY_LINE\n", 200))
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatalf("split sync error = %v", err)
+	}
+	parts, err := listAntigravityPartFiles(filepath.Join(configDir, "rules"))
+	if err != nil || len(parts) == 0 {
+		t.Fatalf("expected split parts, got %v (err %v)", parts, err)
+	}
+	for _, path := range append([]string{primary}, parts...) {
+		if got := managedCopyOverlay(path); got != "antigravity" {
+			t.Fatalf("%s records overlay %q, want antigravity", path, got)
+		}
+	}
+	recheck, err := syncConfig(cfg, Options{Check: true})
+	if err != nil {
+		t.Fatalf("recheck error = %v", err)
+	}
+	if got := antigravityStatusOf(recheck.Results, primary); got != "ok" {
+		t.Fatalf("split with overlay did not converge: %q (%+v)", got, recheck.Results)
+	}
+}
+
+func TestInstructionOverlayWatchFollowsLinkedDirectory(t *testing.T) {
+	home := hardeningHome(t)
+	source := filepath.Join(home, "config", "AGENTS.md")
+	realDir := filepath.Join(home, "dotfiles", "instructions")
+	linkedDir := filepath.Join(home, "config", "instructions")
+	hardeningWrite(t, source, "BASE_RULE\n")
+	hardeningWrite(t, filepath.Join(realDir, "pi.md"), "PI_RULE_V1\n")
+	if err := os.Symlink(realDir, linkedDir); err != nil {
+		skipOnLinkPrivilegeDenied(t, err)
+	}
+	cfg, err := defaultGlobalConfig()
+	if err != nil {
+		t.Fatalf("defaultGlobalConfig() error = %v", err)
+	}
+	cfg.Source = source
+	cfg.InstructionOverlayDir = linkedDir
+	before, err := watchSnapshotOf(cfg)
+	if err != nil {
+		t.Fatalf("snapshot error = %v", err)
+	}
+	hardeningWrite(t, filepath.Join(realDir, "pi.md"), "PI_RULE_V2\n")
+	after, err := watchSnapshotOf(cfg)
+	if err != nil {
+		t.Fatalf("snapshot error = %v", err)
+	}
+	if before.equal(after) {
+		t.Fatal("watch missed an edit inside a linked fragment directory")
 	}
 }

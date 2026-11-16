@@ -88,6 +88,15 @@ func reportError(report RunReport) error {
 func syncConfig(cfg Config, opts Options) (RunReport, error) {
 	report := RunReport{Source: cfg.Source}
 
+	// Runtime fragments are validated before any write so a duplicate or
+	// unreadable file cannot leave a half-updated source. Rendering still happens
+	// per target, after imports, against the final source.
+	overlays, overlayWarnings, err := loadInstructionOverlays(cfg.InstructionOverlayDir, cfg.Targets)
+	if err != nil {
+		return report, err
+	}
+	report.Results = append(report.Results, overlayWarnings...)
+
 	if !pathExists(cfg.Source) {
 		var existing []string
 		for _, t := range cfg.Targets {
@@ -137,14 +146,15 @@ func syncConfig(cfg Config, opts Options) (RunReport, error) {
 			}
 		}
 	}
-	// Runtime fragments extend the final source, so load them after imports.
-	overlays, overlayWarnings, err := loadInstructionOverlays(cfg.InstructionOverlayDir, cfg.Targets)
-	if err != nil {
-		return report, err
-	}
-	report.Results = append(report.Results, overlayWarnings...)
+	// Runtime fragments extend the final source, so they are applied per target
+	// below, after imports, against the final source.
 	for _, target := range cfg.Targets {
-		render := newInstructionRender(target, overlays)
+		// A missing source is reported as its own result; never fail the preview
+		// because a fragment had nothing to extend.
+		render := instructionRender{}
+		if pathExists(cfg.Source) {
+			render = newInstructionRender(target, overlays)
+		}
 		if target.Mode == "antigravity" {
 			result, backups, err := syncAntigravityTarget(cfg.Source, target, render, opts)
 			if err != nil {
@@ -464,10 +474,13 @@ func derivedKind(target Target, render instructionRender) string {
 
 // aliasDetail labels a created alias or managed copy in the report.
 func aliasDetail(kind string, render instructionRender) string {
-	if render.active() && kind != "cursor-rule" {
-		return fmt.Sprintf("managed copy with the %s overlay", render.Runtime)
+	if !render.active() {
+		return kind
 	}
-	return kind
+	if kind == "cursor-rule" {
+		return fmt.Sprintf("cursor-rule with the %s overlay", render.Runtime)
+	}
+	return fmt.Sprintf("managed copy with the %s overlay", render.Runtime)
 }
 
 // syncOverlayCopy writes source plus the runtime fragment as a managed copy,
@@ -525,10 +538,8 @@ func syncOverlayCopy(source string, target Target, render instructionRender, opt
 	if err != nil {
 		return result, "", err
 	}
-	if err := removePath(target.Path); err != nil {
-		return result, "", err
-	}
 	// Cursor only loads .mdc rules that carry alwaysApply frontmatter.
+	// The write is atomic, so a failed write keeps the previous copy.
 	if target.Mode == "cursor" {
 		err = writeCursorRuleBytes(source, target.Path, payload, render.Runtime)
 	} else {

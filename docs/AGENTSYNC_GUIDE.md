@@ -61,7 +61,7 @@ The canonical `AGENTS.md` stays shared. To give one installed tool extra rules, 
     └── pi.md      # appended only for Pi
 ```
 
-The file name is the runtime key used elsewhere in agentsync: `pi`, `codex`, `claude`, `cursor`, `antigravity`, `windsurf`, `kimi-code`, `agents`, and so on. Matching is case-insensitive; `instructions/PI.md` and `instructions/pi.md` are rejected as one runtime defined twice. Non-Markdown files, hidden files, and Syncthing conflict copies are ignored. A missing or blank fragment counts as absent; an unreadable fragment fails the run instead of being skipped silently.
+The file name is the runtime key used elsewhere in agentsync: `pi`, `codex`, `claude`, `cursor`, `antigravity`, `windsurf`, `kimi-code`, `agents`, and so on. Matching is case-insensitive; on a case-sensitive volume `instructions/PI.md` and `instructions/pi.md` are rejected as one runtime defined twice (a case-insensitive volume merges them into one file). Non-Markdown files, hidden files, and Syncthing conflict copies are ignored. A missing or blank fragment counts as absent; an unreadable fragment fails the run before anything is written.
 
 A runtime with a fragment receives a managed copy of `AGENTS.md` plus the fragment instead of a symlink, because a symlink cannot hold a per-tool difference:
 
@@ -73,11 +73,11 @@ A runtime with a fragment receives a managed copy of `AGENTS.md` plus the fragme
 <!-- agentsync:end overlay -->
 ```
 
-The generated header records `overlay="pi"` and a SHA-256 hash of the rendered body, so editing either file refreshes the copy on the next run. Removing or blanking the fragment backs up the copy and restores the link, so later source edits apply again without a rewrite. Tools without a fragment keep their links.
+The generated header records `overlay="pi"` and a SHA-256 hash of the rendered body, so editing either file refreshes the copy on the next run. Removing or blanking the fragment backs up the copy and restores the normal alias, so later source edits apply again without a rewrite: a symlink where the platform allows it, otherwise the usual hardlink or managed-copy fallback. Tools without a fragment keep their links.
 
 Runtime-specific formats still apply: Cursor adds its `alwaysApply: true` frontmatter, a standalone `~/.gemini/AGENTS.md` stays plain Markdown without frontmatter and splits into `agentsync-part-*.md` once the merged body exceeds `22,000` bytes, and Windsurf reports a `warning` when the rendered body exceeds its 6,000-character `memories/global_rules.md` limit.
 
-Hand-written content at a target is still imported before the copy replaces it, and managed copies are never imported back. Note which runtimes also read a shared file: `agents.md` affects `~/.agents/AGENTS.md`, which Kimi Code and Factory Droid also load, and `antigravity-cli` has no separate instruction target, so use `antigravity.md`.
+Hand-written content at a target is still imported before the copy replaces it, and generated copies are never imported back: a managed copy is refreshed, and a copy whose marker line was stripped has its `agentsync:begin overlay` section removed before any import, so fragment text never spreads to other runtimes. Note which runtimes also read a shared file: `agents.md` affects `~/.agents/AGENTS.md`, which Kimi Code and Factory Droid also load, and `antigravity-cli` has no separate instruction target, so use `antigravity.md`.
 
 Unknown fragment names warn in the report instead of failing the run. Repository and batch modes ignore this directory, and the watcher treats a fragment-only change as a rules change, so MCP files are not rewritten.
 
@@ -96,6 +96,8 @@ Unknown fragment names warn in the report instead of failing the run. Repository
 | `wrong-link` | Link points to the wrong source | Apply; use `--force` only for intentional replacement |
 | `broken-link` | Link destination is absent | Apply to repair it |
 | `blocked` | Target or configuration cannot be handled safely | Inspect the reported cause |
+
+The table covers preview verdicts. Apply reports `created`, `linked`, `replaced`, `merged`, or `repaired` (a broken link was fixed), and batch mode reports `conflict` when a merge draft needs review; the detail names the file kind, for example `symlink`, `managed copy with the pi overlay`, or `restored symlink now that the runtime overlay is gone`.
 
 ## Watch mode and services
 

@@ -120,9 +120,9 @@ func listAntigravityPartFiles(rulesDir string) ([]string, error) {
 	return out, nil
 }
 
-func renderAntigravityPrimary(source, sumHex, body string) []byte {
+func renderAntigravityPrimary(source, sumHex, overlay, body string) []byte {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%ssource=%q sha256=%s part=1 -->\n", managedMarkerPrefix, source, sumHex)
+	b.WriteString(managedMarkerLine(source, sumHex, overlay, " part=1"))
 	b.WriteString(body)
 	if !strings.HasSuffix(body, "\n") {
 		b.WriteByte('\n')
@@ -130,10 +130,10 @@ func renderAntigravityPrimary(source, sumHex, body string) []byte {
 	return []byte(b.String())
 }
 
-func renderAntigravityPart(source, sumHex string, part, total int, body string) []byte {
+func renderAntigravityPart(source, sumHex, overlay string, part, total int, body string) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "---\ntrigger: always_on\ndescription: agentsync global instructions (part %d of %d)\n---\n", part, total)
-	fmt.Fprintf(&b, "%ssource=%q sha256=%s part=%d total=%d -->\n", managedMarkerPrefix, source, sumHex, part, total)
+	fmt.Fprintf(&b, "%s", managedMarkerLine(source, sumHex, overlay, fmt.Sprintf(" part=%d total=%d", part, total)))
 	b.WriteString(body)
 	if !strings.HasSuffix(body, "\n") {
 		b.WriteByte('\n')
@@ -141,9 +141,9 @@ func renderAntigravityPart(source, sumHex string, part, total int, body string) 
 	return []byte(b.String())
 }
 
-func splitAntigravityRules(source, sumHex string, data []byte, maxFileBytes int) []string {
-	headerReserve := len(renderAntigravityPart(source, sumHex, 999, 999, "")) + 2
-	primaryReserve := len(renderAntigravityPrimary(source, sumHex, "")) + 2
+func splitAntigravityRules(source, sumHex, overlay string, data []byte, maxFileBytes int) []string {
+	headerReserve := len(renderAntigravityPart(source, sumHex, overlay, 999, 999, "")) + 2
+	primaryReserve := len(renderAntigravityPrimary(source, sumHex, overlay, "")) + 2
 	if primaryReserve > headerReserve {
 		headerReserve = primaryReserve
 	}
@@ -319,6 +319,12 @@ func syncAntigravityTarget(source string, target Target, render instructionRende
 
 	sourceData, err := render.body(source)
 	if err != nil {
+		if !pathExists(source) {
+			// The missing source is reported on its own; a preview must not fail here.
+			result.Status = "missing"
+			result.Detail = "would create alias"
+			return result, nil, nil
+		}
 		return result, nil, err
 	}
 	if len(sourceData) <= antigravityMaxChunkBytes {
@@ -327,7 +333,7 @@ func syncAntigravityTarget(source string, target Target, render instructionRende
 		}
 		return syncAntigravityCompact(source, sourceData, target, partFiles, opts)
 	}
-	return syncAntigravitySplit(source, sourceData, target, rulesDir, partFiles, opts)
+	return syncAntigravitySplit(source, sourceData, target, rulesDir, partFiles, render, opts)
 }
 
 // syncAntigravityOverlayCopy writes the merged source and runtime fragment as
@@ -415,7 +421,7 @@ func checkAntigravityPrimaryTarget(path string) error {
 
 func syncAntigravityCompact(source string, sourceData []byte, target Target, partFiles []string, opts Options) (TargetResult, []string, error) {
 	result := TargetResult{Path: target.Path}
-	linkTarget := Target{Path: target.Path, Mode: "link", Detect: target.Detect}
+	linkTarget := Target{Name: target.Name, Path: target.Path, Mode: "link", Detect: target.Detect}
 	if len(partFiles) == 0 {
 		res, backup, err := syncTarget(source, linkTarget, instructionRender{}, opts)
 		var backups []string
@@ -440,7 +446,7 @@ func syncAntigravityCompact(source string, sourceData []byte, target Target, par
 				return result, nil, err
 			}
 			if len(updated) > antigravityMaxChunkBytes {
-				return syncAntigravitySplit(source, updated, target, antigravityRulesDir(target.Path), partFiles, opts)
+				return syncAntigravitySplit(source, updated, target, antigravityRulesDir(target.Path), partFiles, instructionRender{}, opts)
 			}
 			sourceData = updated
 		}
@@ -476,7 +482,7 @@ func syncAntigravityCompact(source string, sourceData []byte, target Target, par
 	return res, backups, nil
 }
 
-func syncAntigravitySplit(source string, sourceData []byte, target Target, rulesDir string, existingParts []string, opts Options) (TargetResult, []string, error) {
+func syncAntigravitySplit(source string, sourceData []byte, target Target, rulesDir string, existingParts []string, render instructionRender, opts Options) (TargetResult, []string, error) {
 	result := TargetResult{Path: target.Path}
 	info, lstatErr := os.Lstat(target.Path)
 	targetExists := lstatErr == nil
@@ -515,11 +521,11 @@ func syncAntigravitySplit(source string, sourceData []byte, target Target, rules
 
 	sum := sha256.Sum256(sourceData)
 	sumHex := hex.EncodeToString(sum[:])
-	chunks := splitAntigravityRules(source, sumHex, sourceData, antigravityMaxChunkBytes)
+	chunks := splitAntigravityRules(source, sumHex, render.Runtime, sourceData, antigravityMaxChunkBytes)
 	specs := make([]antigravityPartSpec, 0, len(chunks))
 	specs = append(specs, antigravityPartSpec{
 		path: target.Path,
-		data: renderAntigravityPrimary(source, sumHex, chunks[0]),
+		data: renderAntigravityPrimary(source, sumHex, render.Runtime, chunks[0]),
 	})
 	expectedSet := make(map[string]struct{}, len(chunks))
 	for i := 1; i < len(chunks); i++ {
@@ -527,7 +533,7 @@ func syncAntigravitySplit(source string, sourceData []byte, target Target, rules
 		expectedSet[p] = struct{}{}
 		specs = append(specs, antigravityPartSpec{
 			path: p,
-			data: renderAntigravityPart(source, sumHex, i+1, len(chunks), chunks[i]),
+			data: renderAntigravityPart(source, sumHex, render.Runtime, i+1, len(chunks), chunks[i]),
 		})
 	}
 	var extraParts []string

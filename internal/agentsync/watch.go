@@ -281,6 +281,12 @@ func addPathFingerprint(h hash.Hash, path string) error {
 }
 
 func watchTreeFingerprint(root string) (string, error) {
+	// Follow a linked canonical directory (for example a dotfiles-managed
+	// instructions/ or skills/ root); WalkDir alone would fingerprint the link
+	// itself and miss every edit inside its target.
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
+	}
 	h := sha256.New()
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
