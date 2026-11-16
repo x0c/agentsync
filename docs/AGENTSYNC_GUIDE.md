@@ -61,7 +61,7 @@ The canonical `AGENTS.md` stays shared. To give one installed tool extra rules, 
     └── pi.md      # appended only for Pi
 ```
 
-The file name is the runtime key used elsewhere in agentsync: `pi`, `codex`, `claude`, `cursor`, `antigravity`, `windsurf`, `kimi-code`, `agents`, and so on. Matching is case-insensitive; `instructions/PI.md` and `instructions/pi.md` are rejected as one runtime defined twice. Non-Markdown files, hidden files, and Syncthing conflict copies are ignored. A missing, unreadable, or blank fragment counts as absent.
+The file name is the runtime key used elsewhere in agentsync: `pi`, `codex`, `claude`, `cursor`, `antigravity`, `windsurf`, `kimi-code`, `agents`, and so on. Matching is case-insensitive; `instructions/PI.md` and `instructions/pi.md` are rejected as one runtime defined twice. Non-Markdown files, hidden files, and Syncthing conflict copies are ignored. A missing or blank fragment counts as absent; an unreadable fragment fails the run instead of being skipped silently.
 
 A runtime with a fragment receives a managed copy of `AGENTS.md` plus the fragment instead of a symlink, because a symlink cannot hold a per-tool difference:
 
