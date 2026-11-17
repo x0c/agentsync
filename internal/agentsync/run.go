@@ -375,7 +375,13 @@ func syncTarget(source string, target Target, render instructionRender, opts Opt
 	if managedCopyOverlay(target.Path) != "" {
 		return syncOverlayRemoval(source, target, opts, result)
 	}
-	if sameContent(source, target.Path) && (target.Mode != "cursor" || isManagedAgentsyncFile(target.Path)) {
+	plainCopyCurrent := false
+	if isManagedAgentsyncFile(target.Path) {
+		if payload, readErr := os.ReadFile(source); readErr == nil {
+			plainCopyCurrent = managedCopyMatches(target.Path, payload, target.Mode, "")
+		}
+	}
+	if sameContent(source, target.Path) && (target.Mode != "cursor" || isManagedAgentsyncFile(target.Path)) && (!isManagedAgentsyncFile(target.Path) || plainCopyCurrent) {
 		if !opts.Force {
 			result.Status = "ok"
 			if target.Mode == "cursor" {
@@ -498,7 +504,7 @@ func syncOverlayCopy(source string, target Target, render instructionRender, opt
 	merged := false
 	if !opts.Force {
 		if isManagedAgentsyncFile(target.Path) {
-			if samePayload(target.Path, payload) {
+			if managedCopyMatches(target.Path, payload, target.Mode, render.Runtime) {
 				result.Status = "ok"
 				result.Detail = detail
 				return result, "", nil

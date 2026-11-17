@@ -74,6 +74,11 @@ func TestConflictMergesAndLinks(t *testing.T) {
 	if got := string(source); !containsAll(got, "source", "target", "agentsync:begin import") {
 		t.Fatalf("source did not contain merged content: %q", got)
 	}
+	for _, noise := range []string{"sha256=", "Imported From", "import path="} {
+		if strings.Contains(string(source), noise) {
+			t.Fatalf("import wrote context noise %q: %q", noise, source)
+		}
+	}
 	if !symlinkPointsTo(cfg.Targets[0].Path, cfg.Source) && !sameContent(cfg.Source, cfg.Targets[0].Path) {
 		t.Fatalf("target was not linked to source: %+v", report)
 	}

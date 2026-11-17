@@ -6,7 +6,7 @@ Implementation starts at `syncMCP()` in `internal/agentsync/mcp.go`; `defaultGlo
 
 ## Canonical source and policy
 
-`~/.config/agentsync/mcp.json` owns the complete server set. Global sync injects an English reminder into canonical `AGENTS.md` to edit that source rather than runtime outputs.
+`~/.config/agentsync/mcp.json` owns the complete server set. Global sync upserts a compact managed block into canonical `AGENTS.md` naming this source and the adjacent per-tool policy file. Generic `agentsync:begin/end` markers identify the block; the next synchronization replaces legacy MCP-specific markers and verbose explanatory text.
 
 ```json
 {

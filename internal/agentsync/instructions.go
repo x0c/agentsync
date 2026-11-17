@@ -218,7 +218,7 @@ func windsurfLimitWarning(source string, target Target, render instructionRender
 		return nil
 	}
 	if render.active() {
-		body = managedCopyBody(source, body, render.Runtime)
+		body = managedCopyBody(body, render.Runtime)
 	}
 	length := utf8.RuneCount(body)
 	if length <= windsurfRulesLimit {

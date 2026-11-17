@@ -2,8 +2,6 @@ package agentsync
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -14,7 +12,7 @@ import (
 	"strings"
 )
 
-const managedMarkerPrefix = "<!-- managed-by: agentsync "
+const managedMarkerPrefix = "<!-- managed-by: agentsync"
 
 func ensureParent(path string) error {
 	return os.MkdirAll(filepath.Dir(path), 0o755)
@@ -134,12 +132,11 @@ func writeManagedCopy(source, target string) error {
 	return writeManagedCopyBytes(source, target, data, "")
 }
 
-// managedMarkerLine renders the generated-file marker. The hash covers the
-// exact bytes written after it, so editing the source or a runtime fragment
-// invalidates the copy.
-func managedMarkerLine(source, sumHex, overlay, suffix string) string {
+// The marker identifies generated copies without spending default Agent context
+// on source paths or hashes. Runtime and part attributes drive lifecycle handling.
+func managedMarkerLine(overlay, suffix string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%ssource=%q sha256=%s", managedMarkerPrefix, source, sumHex)
+	b.WriteString(managedMarkerPrefix)
 	if overlay != "" {
 		fmt.Fprintf(&b, " %s%q", overlayMarkerAttr, overlay)
 	}
@@ -148,37 +145,36 @@ func managedMarkerLine(source, sumHex, overlay, suffix string) string {
 	return b.String()
 }
 
-func managedCopyBody(source string, payload []byte, overlay string) []byte {
-	sum := sha256.Sum256(payload)
-	line := managedMarkerLine(source, hex.EncodeToString(sum[:]), overlay, "")
-	return append([]byte(line), payload...)
+func managedCopyBody(payload []byte, overlay string) []byte {
+	return append([]byte(managedMarkerLine(overlay, "")), payload...)
 }
 
 func writeManagedCopyBytes(source, target string, payload []byte, overlay string) error {
-	return writeFileAtomic(target, managedCopyBody(source, payload, overlay), 0o644)
+	return writeFileAtomic(target, managedCopyBody(payload, overlay), 0o644)
 }
 
 func writeCursorRuleBytes(source, target string, payload []byte, overlay string) error {
-	return writeFileAtomic(target, cursorRuleBody(source, payload, overlay), 0o644)
+	return writeFileAtomic(target, cursorRuleBody(payload, overlay), 0o644)
 }
 
 // cursorRuleBody adds the alwaysApply frontmatter Cursor requires, then the
 // generated-file marker and the instruction body.
-func cursorRuleBody(source string, payload []byte, overlay string) []byte {
+func cursorRuleBody(payload []byte, overlay string) []byte {
 	var b strings.Builder
 	b.WriteString(cursorFrontmatter)
-	b.Write(managedCopyBody(source, payload, overlay))
+	b.Write(managedCopyBody(payload, overlay))
 	return []byte(b.String())
 }
 
-// samePayload reports whether an existing target already holds payload after
-// stripping generated headers and Cursor frontmatter.
-func samePayload(path string, payload []byte) bool {
-	got, err := readPayload(path)
-	if err != nil {
-		return false
+// managedCopyMatches compares the complete rendered file so legacy headers
+// carrying source paths or hashes are refreshed even when their bodies match.
+func managedCopyMatches(path string, payload []byte, mode, overlay string) bool {
+	expected := managedCopyBody(payload, overlay)
+	if mode == "cursor" {
+		expected = cursorRuleBody(payload, overlay)
 	}
-	return bytes.Equal(got, payload)
+	got, err := os.ReadFile(path)
+	return err == nil && bytes.Equal(got, expected)
 }
 
 // managedCopyOverlay returns the runtime recorded in a generated copy's marker,

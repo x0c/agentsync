@@ -97,6 +97,14 @@ func TestInstructionOverlayAppliesToOneRuntime(t *testing.T) {
 	if managedCopyOverlay(piPath) != "pi" {
 		t.Fatalf("overlay marker not recorded on %s", piPath)
 	}
+	if !strings.HasPrefix(piBody, "<!-- managed-by: agentsync overlay=\"pi\" -->\n") {
+		t.Fatalf("unexpected managed header: %q", piBody)
+	}
+	for _, noise := range []string{"sha256=", "source=", source} {
+		if strings.Contains(strings.SplitN(piBody, "\n", 2)[0], noise) {
+			t.Fatalf("managed header contains context noise %q: %q", noise, piBody)
+		}
+	}
 
 	recheck, err := syncConfig(cfg, Options{Check: true})
 	if err != nil {
@@ -106,6 +114,38 @@ func TestInstructionOverlayAppliesToOneRuntime(t *testing.T) {
 		if result.Status != "ok" {
 			t.Fatalf("first apply did not converge: %+v", result)
 		}
+	}
+}
+
+func TestInstructionOverlayMigratesVerboseManagedHeader(t *testing.T) {
+	home, source, overlayDir := overlayFixture(t)
+	piPath := filepath.Join(home, ".pi", "agent", "AGENTS.md")
+	hardeningWrite(t, filepath.Join(overlayDir, "pi.md"), "PI_ONLY_RULE\n")
+	cfg := Config{
+		Source:                source,
+		Targets:               []Target{overlayTarget(t, "pi", piPath)},
+		InstructionOverlayDir: overlayDir,
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	body := hardeningRead(t, piPath)
+	_, body, _ = strings.Cut(body, "\n")
+	legacyHeader := "<!-- managed-by: agentsync source=\"/private/source/AGENTS.md\" sha256=0123456789abcdef overlay=\"pi\" -->\n"
+	hardeningWrite(t, piPath, legacyHeader+body)
+
+	preview, err := syncConfig(cfg, Options{Check: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := overlayResult(t, preview.Results, piPath).Status; got != "replaceable" {
+		t.Fatalf("legacy header preview status = %q", got)
+	}
+	if _, err := syncConfig(cfg, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := hardeningRead(t, piPath); !strings.HasPrefix(got, "<!-- managed-by: agentsync overlay=\"pi\" -->\n") || strings.Contains(got, "sha256=") {
+		t.Fatalf("legacy header was not minimized: %q", got)
 	}
 }
 

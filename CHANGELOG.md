@@ -16,6 +16,7 @@ Release: minor
 - Keep runtime format rules for merged bodies: Cursor keeps `alwaysApply: true`, Antigravity stays plain Markdown without frontmatter and still splits above `22,000` bytes (split files also record `overlay=`), and Windsurf reports a warning above its 6,000-character `global_rules.md` limit, counting the generated marker.
 - Limit fragments to global mode: repository and batch runs ignore `instructions/`, and the watcher treats a fragment-only change as a rules change so MCP files are not rewritten. A linked `instructions/` directory is followed when fingerprinting.
 - Never treat generated copies as instruction input: initializing a missing canonical source skips `managed-by: agentsync` files, and imports strip generated overlay sections, so a copied or marker-less generated body cannot seed or duplicate fragment text into `AGENTS.md`. Managed copies and Cursor rules are written atomically.
+- Reduce fixed Agent context: managed headers omit source paths and hashes, retained imports use minimal delimiters without origin metadata, and MCP guidance is a compact generic `agentsync:begin/end` block. Synchronization migrates legacy verbose notices and compares bodies rather than header hashes.
 
 ### 简体中文
 
@@ -23,6 +24,7 @@ Release: minor
 - 合并后的正文仍遵守各工具格式：Cursor 保留 `alwaysApply: true`；Antigravity 保持无 frontmatter 的纯 Markdown，超过 `22,000` 字节仍会自动切分（切分文件同样记录 `overlay=`）；Windsurf 超过 `global_rules.md` 的 6,000 字符上限时给出告警，并计入生成头部的字符。
 - 片段只在全局模式生效：仓库模式与批量模式忽略 `instructions/`，watch 仅把片段改动当作规则变更，不重写 MCP 配置；`instructions/` 为符号链接时也能正确监控。
 - 生成副本不再作为规则来源：canonical 源缺失需要重建时跳过 `managed-by: agentsync` 文件，导入时会剥离生成的 overlay 段，避免复制来的或去掉了标记的生成内容把专属片段重复写回 `AGENTS.md`；托管副本与 Cursor 规则改为原子写入。
+- 减少固定 Agent 上下文：托管头部不再写源路径和哈希；保留的导入内容只用简短分隔符，不写来源元数据；MCP 提示压缩为通用的 `agentsync:begin/end` 块。同步会迁移旧版冗长提示，并通过正文比较而不是头部哈希刷新副本。
 
 ## 1.2.1
 

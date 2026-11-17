@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	mcpNoticeBegin = "<!-- agentsync:begin mcp -->"
-	mcpNoticeEnd   = "<!-- agentsync:end mcp -->"
+	mcpNoticeBegin = "<!-- agentsync:begin -->"
+	mcpNoticeEnd   = "<!-- agentsync:end -->"
+	legacyMCPBegin = "<!-- agentsync:begin mcp -->"
+	legacyMCPEnd   = "<!-- agentsync:end mcp -->"
 )
 
 func syncMCP(cfg Config, opts Options) ([]TargetResult, []string, error) {
@@ -506,19 +508,12 @@ func appendNewline(data []byte) []byte {
 	return data
 }
 
+// mcpNoticeText contains only rules that change Agent behavior. Generic
+// agentsync markers delimit this managed context without an MCP-specific tag.
 func mcpNoticeText() string {
 	return mcpNoticeBegin + "\n" +
-		"## MCP configuration\n\n" +
-		"The single source of truth for MCP servers is `~/.config/agentsync/mcp.json` on this machine " +
-		"(contains tokens; keep it out of git / Syncthing; it sits next to this file and `skills/`). " +
-		"To add, change, or remove an MCP server, edit only that JSON — never each tool's own MCP config " +
-		"(e.g. `~/.claude.json`, `~/.cursor/mcp.json`, `~/.codex/config.toml`). " +
-		"Running `agentsync` overwrites installed tools' user-level MCP entries with the canonical server set, " +
-		"translated per tool schema. " +
-		"Per-tool trimming (e.g. keeping a server out of one agent) goes in `sync-policy.json` in the same directory, " +
-		"not in each tool's MCP file. " +
-		"`agentsync --watch` only writes outward from the canonical source; " +
-		"servers added in a tool's UI are never pulled back.\n" +
+		"Edit MCP servers only in `~/.config/agentsync/mcp.json`; per-tool exclusions go in `sync-policy.json` beside it. " +
+		"`agentsync` writes outward to installed tools and never imports servers added through their UI.\n" +
 		mcpNoticeEnd
 }
 
@@ -534,10 +529,10 @@ func syncMCPNotice(source string, opts Options) (*TargetResult, error) {
 	if !changed {
 		return nil, nil
 	}
-	result := TargetResult{Path: source, Status: "replaced", Detail: "injected mcp notice"}
+	result := TargetResult{Path: source, Status: "replaced", Detail: "injected agentsync notice"}
 	if opts.Check {
 		result.Status = "replaceable"
-		result.Detail = "would inject mcp notice"
+		result.Detail = "would inject agentsync notice"
 		return &result, nil
 	}
 	info, err := os.Lstat(source)
@@ -552,15 +547,17 @@ func syncMCPNotice(source string, opts Options) (*TargetResult, error) {
 
 func upsertMCPNotice(body string) (string, bool) {
 	notice := mcpNoticeText()
-	begin := strings.Index(body, mcpNoticeBegin)
-	end := strings.Index(body, mcpNoticeEnd)
-	if begin >= 0 && end > begin {
-		end += len(mcpNoticeEnd)
-		current := body[begin:end]
-		if current == notice {
-			return body, false
+	for _, markers := range [][2]string{{mcpNoticeBegin, mcpNoticeEnd}, {legacyMCPBegin, legacyMCPEnd}} {
+		begin := strings.Index(body, markers[0])
+		end := strings.Index(body, markers[1])
+		if begin >= 0 && end > begin {
+			end += len(markers[1])
+			current := body[begin:end]
+			if current == notice {
+				return body, false
+			}
+			return body[:begin] + notice + body[end:], true
 		}
-		return body[:begin] + notice + body[end:], true
 	}
 	trimmed := strings.TrimRight(body, "\n")
 	if trimmed == "" {

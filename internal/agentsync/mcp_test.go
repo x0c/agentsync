@@ -1225,11 +1225,33 @@ func TestUpsertMCPNoticeIdempotent(t *testing.T) {
 	if changed {
 		t.Fatalf("second inject should be no-op: %q", twice)
 	}
-	if !strings.Contains(twice, mcpNoticeBegin) || !strings.Contains(twice, "mcp.json") {
-		t.Fatalf("notice missing: %q", twice)
+	if !strings.Contains(twice, "<!-- agentsync:begin -->") || !strings.Contains(twice, "<!-- agentsync:end -->") {
+		t.Fatalf("generic agentsync markers missing: %q", twice)
 	}
-	if !strings.Contains(twice, "sync-policy.json") {
-		t.Fatalf("notice should mention sync-policy.json: %q", twice)
+	if !strings.Contains(twice, "mcp.json") || !strings.Contains(twice, "sync-policy.json") {
+		t.Fatalf("behavioral MCP guidance missing: %q", twice)
+	}
+	for _, noise := range []string{"begin mcp", "end mcp", "## MCP configuration", "single source of truth"} {
+		if strings.Contains(twice, noise) {
+			t.Fatalf("notice contains context noise %q: %q", noise, twice)
+		}
+	}
+}
+
+func TestUpsertMCPNoticeMigratesLegacyBlock(t *testing.T) {
+	legacy := "before\n\n" + legacyMCPBegin + "\n## MCP configuration\n\nold verbose instructions\n" + legacyMCPEnd + "\n\nafter\n"
+	got, changed := upsertMCPNotice(legacy)
+	if !changed {
+		t.Fatal("legacy notice should be replaced")
+	}
+	if !strings.HasPrefix(got, "before\n\n") || !strings.HasSuffix(got, "\n\nafter\n") {
+		t.Fatalf("surrounding user content changed: %q", got)
+	}
+	if strings.Contains(got, "old verbose") || strings.Contains(got, legacyMCPBegin) {
+		t.Fatalf("legacy notice survived migration: %q", got)
+	}
+	if next, changed := upsertMCPNotice(got); changed || next != got {
+		t.Fatalf("migrated notice is not idempotent: %q", next)
 	}
 }
 

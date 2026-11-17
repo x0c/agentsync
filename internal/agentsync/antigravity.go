@@ -2,8 +2,6 @@ package agentsync
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -120,9 +118,9 @@ func listAntigravityPartFiles(rulesDir string) ([]string, error) {
 	return out, nil
 }
 
-func renderAntigravityPrimary(source, sumHex, overlay, body string) []byte {
+func renderAntigravityPrimary(overlay, body string) []byte {
 	var b strings.Builder
-	b.WriteString(managedMarkerLine(source, sumHex, overlay, " part=1"))
+	b.WriteString(managedMarkerLine(overlay, " part=1"))
 	b.WriteString(body)
 	if !strings.HasSuffix(body, "\n") {
 		b.WriteByte('\n')
@@ -130,10 +128,10 @@ func renderAntigravityPrimary(source, sumHex, overlay, body string) []byte {
 	return []byte(b.String())
 }
 
-func renderAntigravityPart(source, sumHex, overlay string, part, total int, body string) []byte {
+func renderAntigravityPart(overlay string, part, total int, body string) []byte {
 	var b strings.Builder
 	fmt.Fprintf(&b, "---\ntrigger: always_on\ndescription: agentsync global instructions (part %d of %d)\n---\n", part, total)
-	fmt.Fprintf(&b, "%s", managedMarkerLine(source, sumHex, overlay, fmt.Sprintf(" part=%d total=%d", part, total)))
+	fmt.Fprintf(&b, "%s", managedMarkerLine(overlay, fmt.Sprintf(" part=%d total=%d", part, total)))
 	b.WriteString(body)
 	if !strings.HasSuffix(body, "\n") {
 		b.WriteByte('\n')
@@ -141,9 +139,9 @@ func renderAntigravityPart(source, sumHex, overlay string, part, total int, body
 	return []byte(b.String())
 }
 
-func splitAntigravityRules(source, sumHex, overlay string, data []byte, maxFileBytes int) []string {
-	headerReserve := len(renderAntigravityPart(source, sumHex, overlay, 999, 999, "")) + 2
-	primaryReserve := len(renderAntigravityPrimary(source, sumHex, overlay, "")) + 2
+func splitAntigravityRules(overlay string, data []byte, maxFileBytes int) []string {
+	headerReserve := len(renderAntigravityPart(overlay, 999, 999, "")) + 2
+	primaryReserve := len(renderAntigravityPrimary(overlay, "")) + 2
 	if primaryReserve > headerReserve {
 		headerReserve = primaryReserve
 	}
@@ -341,7 +339,7 @@ func syncAntigravityTarget(source string, target Target, render instructionRende
 // frontmatter, and Antigravity does not follow a symlink here.
 func syncAntigravityOverlayCopy(source string, body []byte, target Target, partFiles []string, render instructionRender, opts Options) (TargetResult, []string, error) {
 	result := TargetResult{Path: target.Path}
-	expected := managedCopyBody(source, body, render.Runtime)
+	expected := managedCopyBody(body, render.Runtime)
 	detail := fmt.Sprintf("antigravity managed copy with the %s overlay", render.Runtime)
 	info, lstatErr := os.Lstat(target.Path)
 	targetExists := lstatErr == nil
@@ -519,13 +517,11 @@ func syncAntigravitySplit(source string, sourceData []byte, target Target, rules
 		}
 	}
 
-	sum := sha256.Sum256(sourceData)
-	sumHex := hex.EncodeToString(sum[:])
-	chunks := splitAntigravityRules(source, sumHex, render.Runtime, sourceData, antigravityMaxChunkBytes)
+	chunks := splitAntigravityRules(render.Runtime, sourceData, antigravityMaxChunkBytes)
 	specs := make([]antigravityPartSpec, 0, len(chunks))
 	specs = append(specs, antigravityPartSpec{
 		path: target.Path,
-		data: renderAntigravityPrimary(source, sumHex, render.Runtime, chunks[0]),
+		data: renderAntigravityPrimary(render.Runtime, chunks[0]),
 	})
 	expectedSet := make(map[string]struct{}, len(chunks))
 	for i := 1; i < len(chunks); i++ {
@@ -533,7 +529,7 @@ func syncAntigravitySplit(source string, sourceData []byte, target Target, rules
 		expectedSet[p] = struct{}{}
 		specs = append(specs, antigravityPartSpec{
 			path: p,
-			data: renderAntigravityPart(source, sumHex, render.Runtime, i+1, len(chunks), chunks[i]),
+			data: renderAntigravityPart(render.Runtime, i+1, len(chunks), chunks[i]),
 		})
 	}
 	var extraParts []string

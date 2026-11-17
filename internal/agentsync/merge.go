@@ -1,8 +1,6 @@
 package agentsync
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -79,6 +77,9 @@ func createSourceFromFiles(source string, files []string) error {
 	return nil
 }
 
+// appendImportedContent preserves unique user text under a minimal generated
+// delimiter. Paths and hashes add no Agent behavior, so deduplication compares
+// the complete imported body instead of writing provenance into fixed context.
 func appendImportedContent(source, origin string) (bool, error) {
 	data, err := importablePayload(origin)
 	if err != nil {
@@ -95,25 +96,13 @@ func appendImportedContent(source, origin string) (bool, error) {
 	if strings.Contains(string(sourceData), string(data)) {
 		return false, nil
 	}
-	hash := sha256.Sum256(data)
-	hashText := hex.EncodeToString(hash[:])
-	if strings.Contains(string(sourceData), "sha256="+hashText) {
-		return false, nil
-	}
 
 	var b strings.Builder
 	if len(sourceData) > 0 && sourceData[len(sourceData)-1] != '\n' {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	b.WriteString("<!-- agentsync:begin import path=\"")
-	b.WriteString(escapeMarkerValue(origin))
-	b.WriteString("\" sha256=")
-	b.WriteString(hashText)
-	b.WriteString(" -->\n")
-	b.WriteString("## Imported From ")
-	b.WriteString(origin)
-	b.WriteString("\n\n")
+	b.WriteString("<!-- agentsync:begin import -->\n")
 	b.Write(data)
 	if data[len(data)-1] != '\n' {
 		b.WriteString("\n")
@@ -139,10 +128,4 @@ func ensureTrailingNewline(data []byte) []byte {
 		return data
 	}
 	return append(data, '\n')
-}
-
-func escapeMarkerValue(value string) string {
-	value = strings.ReplaceAll(value, `"`, "&quot;")
-	value = strings.ReplaceAll(value, "--", "- -")
-	return value
 }

@@ -32,7 +32,7 @@ The target list comes from `defaultGlobalConfig()` in `internal/agentsync/paths.
 
 The first apply may report `created`, `merged`, `replaced`, or `linked`. Repeating it should converge installed targets to `ok`. Existing unique instructions are preserved before replacement. Managed copies, including Cursor `.mdc` rules and split Antigravity rule files, are derived from the source and are refreshed directly rather than imported back into it.
 
-Global mode translates canonical MCP servers into installed runtimes' formats and injects an English reminder to edit only the canonical configuration. Repository and batch modes do not synchronize global instructions, skills, or MCP. Pi selects native or adapter output as described in the [MCP guide](agent_runtime_mcp_paths.md#pi-earendil-workspi).
+Global mode translates canonical MCP servers into installed runtimes' formats and upserts a compact managed block with the canonical MCP and per-tool policy paths. Generic `agentsync:begin/end` markers delimit it; older MCP-specific markers and verbose notices are replaced in place. Generated instructions contain only behavior-changing rules, not explanatory metadata. Repository and batch modes do not synchronize global instructions, skills, or MCP. Pi selects native or adapter output as described in the [MCP guide](agent_runtime_mcp_paths.md#pi-earendil-workspi).
 
 For example, exclude a server from Codex while keeping it available to other runtimes:
 
@@ -73,7 +73,7 @@ A runtime with a fragment receives a managed copy of `AGENTS.md` plus the fragme
 <!-- agentsync:end overlay -->
 ```
 
-The generated header records `overlay="pi"` and a SHA-256 hash of the rendered body, so editing either file refreshes the copy on the next run. Removing or blanking the fragment backs up the copy and restores the normal alias, so later source edits apply again without a rewrite: a symlink where the platform allows it, otherwise the usual hardlink or managed-copy fallback. Tools without a fragment keep their links.
+The generated header records only `overlay="pi"`; it has no source path or content hash. Synchronization compares the rendered body, so editing either input refreshes the copy on the next run. Removing or blanking the fragment backs up the copy and restores the normal alias, so later source edits apply again without a rewrite: a symlink where the platform allows it, otherwise the usual hardlink or managed-copy fallback. Tools without a fragment keep their links.
 
 Runtime-specific formats still apply: Cursor adds its `alwaysApply: true` frontmatter, a standalone `~/.gemini/AGENTS.md` stays plain Markdown without frontmatter and splits into `agentsync-part-*.md` once the merged body exceeds `22,000` bytes, and Windsurf reports a `warning` when the rendered body exceeds its 6,000-character `memories/global_rules.md` limit.
 
