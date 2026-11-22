@@ -235,7 +235,9 @@ Long remote CI/publication waits may run in a traceable background process. Keep
 
 A manual installer verification workflow (`Installers`, `.github/workflows/install.yml`) exercises `install.sh` (macOS/Linux) and `install.ps1` (Windows) against a published release and runs `agentsync --version` on the result; a Linux job also tries the Homebrew cask. It installs what is already published, so trigger it after each release (releases before 1.1.0 lack `--version`) and whenever the installers change.
 
-### Retained Homebrew compatibility warning
+### Retained Homebrew compatibility warnings
+
+The 1.3.0 installer check on GitHub-hosted Ubuntu completed the Homebrew cask install and version readback. Homebrew 7.0.14 reported that the runner exposes Landlock ABI 8, below ABI 10 for a complete sandbox network deny. Homebrew applied the restrictions supported by the kernel; this is a runner sandbox limit, not an AgentSync runtime warning. Recheck on an ABI 10 or newer runner and do not disable the sandbox to remove the notice. See [Homebrew's Landlock documentation](https://docs.brew.sh/rubydoc/Sandbox/Landlock.html).
 
 Homebrew 7 reports `Calling postflight is deprecated` for the generated cask. The origin is GoReleaser's `homebrew_casks.hooks.post.install` wrapper, not agentsync's executable. The hook removes quarantine from the downloaded macOS binary. The v0.16.1 release passed archive checksum verification, Homebrew upgrade, installed-binary verification, and isolated preview -> apply -> recheck despite this warning.
 
