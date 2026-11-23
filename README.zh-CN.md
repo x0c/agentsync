@@ -12,6 +12,8 @@ Claude Code、Codex、OpenCode、Gemini CLI、Antigravity、Qwen Code、Copilot 
 
 *Claude Code 与 Codex 的真实运行演示；为便于阅读，仅展示部分输出。*
 
+> **本地优先设计：** 100% 本地执行 · 零遥测 · 支持 `agentsync --check` 预览变更 · `agentsync --rollback latest` 自动快照回滚。
+
 ## 安装
 
 **Windows — PowerShell：**
@@ -55,7 +57,7 @@ agentsync
 
 就这一条。它会合并已有规则、收集完整的 Skill 文件夹，并导入 MCP 服务器配置，统一到一个共享目录，再为已安装的工具建立链接或写入对应格式的配置。替换前自动备份，未安装的工具自动跳过。
 
-此后，只需维护 `~/.config/agentsync/`（Windows 为 `%USERPROFILE%\.config\agentsync\`）中的这三项：
+此后，只需维护 `~/.config/agentsync/`（Windows 为 `%USERPROFILE%\.config\agentsync\`）中的这四项：
 
 | 文件 | 只维护一份的内容 |
 |---|---|
@@ -89,6 +91,20 @@ agentsync
 - 安全检查会拒绝不支持的参数、无效 MCP 条目和不安全的 Skill 目录重叠。生成副本前先合入用户自写的个性化规则；同名的 Codex 服务器保留各自的本地限制与认证配置。回滚机制采用防冲突的独立备份快照，且 `--rollback latest` 会自动跳过无文件变更的空记录。详见 [内容保留边界](docs/AGENTSYNC_KNOWLEDGE_BASE.md)。
 
 遇到问题或希望支持新工具？[提交 Issue](https://github.com/x0c/agentsync/issues)，附上工具名称、系统和脱敏输出。贡献规范见 [AGENTS.md](AGENTS.md)。
+
+## 常见问题
+
+### 如何在 Claude Code、Cursor、Codex 和 Windsurf 之间同步 `CLAUDE.md`、`AGENTS.md`、Skills 与 MCP 配置？
+
+只需维护 `~/.config/agentsync/` 中的一份真源（`AGENTS.md`、`skills/`、`mcp.json` 以及可选的 `instructions/<runtime>.md`），先用 `agentsync --check` 预览变更，再运行 `agentsync` 或 `agentsync --watch` 自动同步；在项目仓库内可运行 `agentsync --repo` 将 `CLAUDE.md` 链接到 `AGENTS.md`。
+
+### `agentsync` 会修改我的现有配置吗？会不会上传 `mcp.json` 里的密钥？
+
+会先备份再写入，且绝对不会上传任何内容。`agentsync` 100% 本地执行、零遥测，不向外部上传规则或令牌；每次覆盖前都会生成防冲突备份快照，可通过 `agentsync --rollback latest` 恢复，`--check` 模式可只预览不写盘。
+
+### `x0c/agentsync` 与手动建软链接有什么区别？
+
+手动软链接无法应对不同工具的格式差异与体积限制。`agentsync` 会自动为 Cursor 生成带 `alwaysApply` 的 `.mdc` 规则、在 Antigravity 超过 24 KB 时自动分片、处理 Windows 符号链接与目录联接、支持单工具专属片段 `instructions/<runtime>.md`，并通过 `sync-policy.json` 按工具过滤条目。
 
 ## 🧩 AI 编程工具链里的相关工具
 

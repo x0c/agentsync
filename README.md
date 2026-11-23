@@ -12,6 +12,8 @@ Keep one copy across Claude Code, Codex, OpenCode, Gemini CLI, Antigravity, Qwen
 
 *A real Claude Code + Codex run; output excerpted for readability.*
 
+> **Local-first by design:** 100% local execution · zero telemetry · dry-run preview (`agentsync --check`) · automatic backup snapshots with `agentsync --rollback latest`.
+
 ## Install
 
 **Windows — PowerShell:**
@@ -89,6 +91,20 @@ See the [workflow guide](docs/AGENTSYNC_GUIDE.md) for background services, batch
 - Safety checks reject unsupported arguments, invalid MCP entries, and unsafe skill-directory overlaps. Your own rules are merged in before copies are generated; Codex servers that share a name keep their local restrictions and authentication options. Rollbacks use collision-resistant backup snapshots, and `latest` skips backups with no file changes. See the [preservation boundaries](docs/AGENTSYNC_KNOWLEDGE_BASE.md).
 
 Questions or a missing tool? [Open an issue](https://github.com/x0c/agentsync/issues) with the tool name, OS, and redacted output. Contributor instructions: [AGENTS.md](AGENTS.md).
+
+## FAQ
+
+### How do I keep `CLAUDE.md`, `AGENTS.md`, skills, and MCP configs in sync across Claude Code, Cursor, Codex, and Windsurf?
+
+Maintain one canonical source in `~/.config/agentsync/` (`AGENTS.md`, `skills/`, `mcp.json`, and optional `instructions/<runtime>.md`), preview changes with `agentsync --check`, and apply with `agentsync` or `agentsync --watch`. Inside a project repository, run `agentsync --repo` to link `CLAUDE.md` to `AGENTS.md`.
+
+### Is `agentsync` safe to run on existing configs? Does it upload my `mcp.json` secrets?
+
+Yes. `agentsync` executes 100% locally with zero telemetry and never uploads your configurations, rules, or MCP tokens. Every replaced file is saved to a collision-resistant backup snapshot that you can restore via `agentsync --rollback latest`, and `agentsync --check` previews changes without writing.
+
+### How is `x0c/agentsync` different from manual symlinks?
+
+Plain symlinks break when tools expect different file formats or enforce size limits. `agentsync` automatically generates Cursor `.mdc` rules with `alwaysApply`, splits Antigravity instructions above its 24 KB limit, handles Windows symbolic links or directory junctions, supports per-tool `instructions/<runtime>.md` fragments, and filters tools via `sync-policy.json`.
 
 ## 🧩 Related Tools in the AI Coding Suite
 
