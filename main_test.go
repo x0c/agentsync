@@ -97,6 +97,18 @@ func TestCLIHelpDoesNotWrite(t *testing.T) {
 	if !strings.Contains(stderr.String(), "print the agentsync version") {
 		t.Fatalf("help missing version flag description: %s", &stderr)
 	}
+	// The per-tool fragment convention is the one capability an installed binary
+	// must explain by itself: its absence sent an agent into the source tree.
+	for _, want := range []string{
+		"instructions/<runtime>.md",
+		"instructions/pi.md",
+		`agentsync:begin overlay target="pi"`,
+		"#per-tool-instruction-fragments",
+	} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("help missing %q: %s", want, &stderr)
+		}
+	}
 	if stdout.Len() != 0 {
 		t.Fatalf("help wrote to stdout: %q", stdout.String())
 	}

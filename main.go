@@ -10,6 +10,41 @@ import (
 	"github.com/x0c/agentsync/internal/agentsync"
 )
 
+// usageSynopsis documents the canonical source layout, including the per-tool
+// fragment convention. An installed binary is often the only thing a user or an
+// agent has to read, so the overlay feature and its file name must be stated
+// here rather than only in the repository guide.
+const usageSynopsis = `agentsync keeps every installed AI coding tool on one canonical instruction source.
+
+Usage:
+  agentsync            sync once
+  agentsync --check    preview without writing
+  agentsync --watch    keep running and resync on change
+
+Canonical source: ~/.config/agentsync (AGENTSYNC_CONFIG_HOME overrides; %APPDATA%\agentsync on Windows)
+  AGENTS.md                  rules shared by every tool
+  instructions/<runtime>.md  extra rules for one tool only, for example instructions/pi.md
+                             The fragment is appended under a marked
+                             <!-- agentsync:begin overlay target="pi" --> block and that tool
+                             receives a managed copy instead of a symlink; tools without a
+                             fragment stay linked. A missing or blank fragment means no overlay.
+  skills/                    skill folders synced to every installed tool
+  mcp.json                   MCP servers translated into each tool's format
+  sync-policy.json           per-tool exclusions
+  backups/                   restore points for --rollback
+
+Runtime keys are the target names in the guide, for example pi, codex, claude, opencode,
+cursor, antigravity, windsurf, kimi-code, agents.
+
+Flags:
+`
+
+// usageDocs points to the full reference, including per-tool fragments, after
+// the flag list.
+const usageDocs = `
+Docs: https://github.com/x0c/agentsync/blob/main/docs/AGENTSYNC_GUIDE.md#per-tool-instruction-fragments
+`
+
 // version is the released version, injected at build time:
 //
 //	-ldflags "-X main.version={{.Version}}"
@@ -36,6 +71,12 @@ func runCLI(args []string, stderr, stdout io.Writer) int {
 	flags.StringVar(&opts.Rollback, "rollback", "", "restore a backup stamp: latest or YYYYMMDD-HHMMSS")
 	flags.BoolVar(&opts.Force, "force", false, "replace conflicting files after backing them up")
 	flags.BoolVar(&opts.Watch, "watch", false, "keep running and sync when the canonical source or an installed runtime changes")
+	flags.Usage = func() {
+		out := flags.Output()
+		_, _ = fmt.Fprint(out, usageSynopsis)
+		flags.PrintDefaults()
+		_, _ = fmt.Fprint(out, usageDocs)
+	}
 	if err := flags.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			return 0
