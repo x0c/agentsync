@@ -8,7 +8,7 @@ the named acceptance is done.
 
 ## Unreleased
 
-Release: minor
+## 1.3.0
 
 ### English
 
