@@ -103,6 +103,7 @@ func TestCLIHelpDoesNotWrite(t *testing.T) {
 		"instructions/<runtime>.md",
 		"instructions/pi.md",
 		`agentsync:begin overlay target="pi"`,
+		"appends a managed MCP",
 		"#per-tool-instruction-fragments",
 	} {
 		if !strings.Contains(stderr.String(), want) {

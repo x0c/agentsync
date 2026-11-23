@@ -33,6 +33,9 @@ Canonical source: ~/.config/agentsync (AGENTSYNC_CONFIG_HOME overrides; %APPDATA
   sync-policy.json           per-tool exclusions
   backups/                   restore points for --rollback
 
+The first sync also creates mcp.json, skills/ and backups/, and appends a managed MCP
+notice block to AGENTS.md.
+
 Runtime keys are the target names in the guide, for example pi, codex, claude, opencode,
 cursor, antigravity, windsurf, kimi-code, agents.
 
