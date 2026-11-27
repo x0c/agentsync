@@ -212,3 +212,66 @@ func TestCLIRuntimeFailureReturnsNonzero(t *testing.T) {
 		t.Fatalf("missing root diagnostic: %s", &stderr)
 	}
 }
+
+func TestCLISkillLifecycleJSONAndReadOnlyStatus(t *testing.T) {
+	home := cliTestHome(t)
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// status before install must be read-only and exit 0.
+	before := cliTree(t, home)
+	var stderr, stdout bytes.Buffer
+	if code := runCLI([]string{"skill", "status", "--json"}, &stderr, &stdout); code != 0 {
+		t.Fatalf("status exit = %d, stderr=%s", code, &stderr)
+	}
+	if !strings.Contains(stdout.String(), `"ok": true`) {
+		t.Fatalf("unexpected status JSON: %s", stdout.String())
+	}
+	if !reflect.DeepEqual(before, cliTree(t, home)) {
+		t.Fatal("skill status wrote files")
+	}
+
+	srcDir := filepath.Join(t.TempDir(), "corral-workflow")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "SKILL.md"), []byte("---\nname: corral-workflow\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// install accepts source path before flags.
+	stdout.Reset()
+	stderr.Reset()
+	if code := runCLI([]string{"skill", "install", srcDir, "--owner", "corral-plugin:workflow", "--json"}, &stderr, &stdout); code != 0 {
+		t.Fatalf("install exit = %d, stderr=%s stdout=%s", code, &stderr, &stdout)
+	}
+	if !strings.Contains(stdout.String(), `"action": "install"`) {
+		t.Fatalf("unexpected install JSON: %s", stdout.String())
+	}
+	if _, err := os.Stat(filepath.Join(claudeDir, "skills", "corral-workflow", "SKILL.md")); err != nil {
+		t.Fatalf("installed skill missing: %v", err)
+	}
+
+	// remove removes the unchanged owned copy.
+	stdout.Reset()
+	stderr.Reset()
+	if code := runCLI([]string{"skill", "remove", "--owner", "corral-plugin:workflow", "--json"}, &stderr, &stdout); code != 0 {
+		t.Fatalf("remove exit = %d, stderr=%s stdout=%s", code, &stderr, &stdout)
+	}
+	if _, err := os.Stat(filepath.Join(claudeDir, "skills", "corral-workflow")); !os.IsNotExist(err) {
+		t.Fatalf("removed skill still exists: %v", err)
+	}
+
+	// invalid usage returns exit 2 without touching files.
+	before = cliTree(t, home)
+	stdout.Reset()
+	stderr.Reset()
+	if code := runCLI([]string{"skill", "install"}, &stderr, &stdout); code != 2 {
+		t.Fatalf("bad install usage exit = %d, want 2", code)
+	}
+	if !reflect.DeepEqual(before, cliTree(t, home)) {
+		t.Fatal("invalid skill invocation wrote files")
+	}
+}

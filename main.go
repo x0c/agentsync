@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/x0c/agentsync/internal/agentsync"
 )
@@ -20,6 +22,7 @@ Usage:
   agentsync            sync once
   agentsync --check    preview without writing
   agentsync --watch    keep running and resync on change
+  agentsync skill <install|remove|status> [flags]  manage externally owned skills
 
 Canonical source: ~/.config/agentsync (AGENTSYNC_CONFIG_HOME overrides; %APPDATA%\agentsync on Windows)
   AGENTS.md                  rules shared by every tool
@@ -61,6 +64,9 @@ func main() {
 }
 
 func runCLI(args []string, stderr, stdout io.Writer) int {
+	if len(args) > 0 && args[0] == "skill" {
+		return runSkillCLI(args[1:], stderr, stdout)
+	}
 	opts := agentsync.Options{}
 	flags := flag.NewFlagSet("agentsync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -133,4 +139,151 @@ func resolvedVersion() string {
 		buildVersion = info.Main.Version
 	}
 	return displayVersion(version, buildVersion)
+}
+
+const skillUsage = `Manage externally owned skill packages across installed AI coding tools.
+
+Usage:
+  agentsync skill install <source> --owner <id> [--skill <name>] [--check] [--json]
+  agentsync skill remove --owner <id> [--skill <name>] [--check] [--json]
+  agentsync skill status [--owner <id>] [--skill <name>] [--json]
+
+Flags may appear before or after the positional source path.
+`
+
+type multiStringFlag []string
+
+func (m *multiStringFlag) String() string {
+	return strings.Join(*m, ",")
+}
+
+func (m *multiStringFlag) Set(value string) error {
+	*m = append(*m, value)
+	return nil
+}
+
+// partitionSkillArgs moves known flags ahead of positional arguments so both
+// `agentsync skill install /dir --owner x` and `--owner x /dir` parse uniformly.
+func partitionSkillArgs(args []string, valueFlags map[string]bool) ([]string, []string) {
+	var flagsOut, posOut []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			posOut = append(posOut, args[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(arg, "-") && arg != "-" {
+			flagsOut = append(flagsOut, arg)
+			name := strings.TrimLeft(arg, "-")
+			if eq := strings.IndexByte(name, '='); eq >= 0 {
+				continue
+			}
+			if valueFlags[name] && i+1 < len(args) {
+				i++
+				flagsOut = append(flagsOut, args[i])
+			}
+			continue
+		}
+		posOut = append(posOut, arg)
+	}
+	return append(flagsOut, posOut...), posOut
+}
+
+func emitSkillReport(stdout io.Writer, report agentsync.ManagedSkillReport, jsonMode bool) int {
+	if jsonMode {
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(report); err != nil {
+			return 1
+		}
+	} else {
+		_, _ = fmt.Fprintf(stdout, "skill %s (%s, %d actions, %d conflicts)\n",
+			report.Action, report.Mode, len(report.Actions), len(report.Conflicts))
+		for _, act := range report.Actions {
+			_, _ = fmt.Fprintf(stdout, "  %-13s %-8s %s\n", act.Action, act.State, act.Path)
+		}
+	}
+	if !report.OK {
+		return 1
+	}
+	return 0
+}
+
+func runSkillCLI(args []string, stderr, stdout io.Writer) int {
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
+		_, _ = fmt.Fprint(stderr, skillUsage)
+		return 0
+	}
+	sub := args[0]
+	if sub != "install" && sub != "remove" && sub != "status" {
+		return cliDiagnostic(stderr, 2, "unknown skill subcommand %q (expected install, remove, or status)", sub)
+	}
+
+	rest, _ := partitionSkillArgs(args[1:], map[string]bool{
+		"owner":  true,
+		"source": true,
+		"skill":  true,
+	})
+	var opts agentsync.ManagedSkillOptions
+	var skillFlags multiStringFlag
+	fs := flag.NewFlagSet("agentsync skill "+sub, flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.StringVar(&opts.Owner, "owner", "", "ownership identifier (for example corral-plugin:workflow)")
+	fs.StringVar(&opts.Source, "source", "", "source directory containing one skill or child skill folders")
+	fs.Var(&skillFlags, "skill", "limit operation to a named skill (repeatable)")
+	if sub == "install" || sub == "remove" {
+		fs.BoolVar(&opts.Check, "check", false, "preview without modifying files")
+	}
+	fs.BoolVar(&opts.JSON, "json", false, "emit structured JSON report to stdout")
+	fs.Usage = func() {
+		_, _ = fmt.Fprint(stderr, skillUsage)
+	}
+
+	if err := fs.Parse(rest); err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		return 2
+	}
+
+	pos := fs.Args()
+	switch sub {
+	case "install":
+		if opts.Source == "" {
+			if len(pos) != 1 {
+				return cliDiagnostic(stderr, 2, "skill install expects exactly one source directory")
+			}
+			opts.Source = pos[0]
+		} else if len(pos) != 0 {
+			return cliDiagnostic(stderr, 2, "unexpected positional arguments %q with --source", pos)
+		}
+		opts.Names = append([]string(nil), skillFlags...)
+		report, err := agentsync.RunManagedSkillInstall(opts)
+		if err != nil {
+			return cliDiagnostic(stderr, 1, "%s", err)
+		}
+		return emitSkillReport(stdout, report, opts.JSON)
+
+	case "remove":
+		if opts.Source != "" {
+			return cliDiagnostic(stderr, 2, "--source is only valid with skill install")
+		}
+		opts.Names = append(append([]string(nil), skillFlags...), pos...)
+		report, err := agentsync.RunManagedSkillRemove(opts)
+		if err != nil {
+			return cliDiagnostic(stderr, 1, "%s", err)
+		}
+		return emitSkillReport(stdout, report, opts.JSON)
+
+	default: // status
+		if opts.Source != "" {
+			return cliDiagnostic(stderr, 2, "--source is only valid with skill install")
+		}
+		opts.Names = append(append([]string(nil), skillFlags...), pos...)
+		report, err := agentsync.RunManagedSkillStatus(opts)
+		if err != nil {
+			return cliDiagnostic(stderr, 1, "%s", err)
+		}
+		return emitSkillReport(stdout, report, opts.JSON)
+	}
 }

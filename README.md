@@ -76,6 +76,7 @@ Run `agentsync` again after changes, or use the optional watcher below.
 | Automatically apply source changes | `agentsync --watch` |
 | Restore the latest backup | `agentsync --rollback latest` |
 | Link a project's `CLAUDE.md` to its `AGENTS.md` | `agentsync --repo` |
+| Install or remove owner-scoped skills (used by tool plugins) | `agentsync skill <install\|remove\|status>` |
 | Print the version | `agentsync --version` |
 
 See the [workflow guide](docs/AGENTSYNC_GUIDE.md) for background services, batch repository sync, filters, and backup details.

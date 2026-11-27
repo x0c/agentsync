@@ -15,8 +15,21 @@ This guide covers commands, report states, service setup, validation, and releas
 | Restore the latest backup | `agentsync --rollback latest` | Yes |
 | Print the version | `agentsync --version` | No |
 | Replace conflicting entries after backup | `agentsync --force` | Yes |
+| Install, remove, or inspect externally owned skills | `agentsync skill <install\|remove\|status>` | Install/remove only |
 
 `main.go` maps flags into `Options`; `Run()` selects rollback, batch, repository, global, or watch execution. Synchronization reports instruction, skill, and MCP results separately. Positional arguments are unsupported and must be rejected before any write, even when followed by `--check`. Reject conflicting or inapplicable mode flags rather than silently ignoring them.
+
+## External tool skill delegation (`agentsync skill`)
+
+External tools such as `corral plugin` can delegate per-plugin skill distribution without duplicating runtime path mappings:
+
+```sh
+agentsync skill install <source-dir> --owner corral-plugin:<name> [--check] [--json]
+agentsync skill remove --owner corral-plugin:<name> [--skill <name>] [--check] [--json]
+agentsync skill status [--owner corral-plugin:<name>] [--json]
+```
+
+When canonical skill synchronization is active (`~/.config/agentsync/skills` linked from installed runtimes or filtered via `sync-policy.json`), `install` and `remove` operate on the canonical `skills/` tree and reconcile per-skill links inside filtered targets (such as `~/.codex/skills`). Otherwise, `agentsync skill` resolves and deduplicates physical skill roots for installed runtimes without creating directories for absent runtimes. Ownership and SHA-256 file integrity are tracked in `~/.config/agentsync/state/managed-skills.json`, so user-authored or user-modified skills are never overwritten or deleted.
 
 ## Global synchronization
 
